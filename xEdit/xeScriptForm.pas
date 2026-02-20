@@ -22,7 +22,43 @@ const
   sNewScriptName = '_newscript_';
   sScriptExt = '.pas';
 
+  cEditorSchemeAuto          = 'Auto';
+  cEditorSchemeDelphiClassic = 'Delphi Classic';
+  cEditorSchemeVisualStudio  = 'Visual Studio';
+  cEditorSchemeSolarizedLight = 'Solarized Light';
+  cEditorSchemeVSCodeDark    = 'VS Code Dark';
+  cEditorSchemeMonokai       = 'Monokai';
+  cEditorSchemeOneDark       = 'One Dark';
+
+  cEditorSchemesSystem: array[0..0] of string = (
+    cEditorSchemeAuto
+  );
+  cEditorSchemesLight: array[0..2] of string = (
+    cEditorSchemeDelphiClassic,
+    cEditorSchemeVisualStudio,
+    cEditorSchemeSolarizedLight
+  );
+  cEditorSchemesDark: array[0..2] of string = (
+    cEditorSchemeVSCodeDark,
+    cEditorSchemeMonokai,
+    cEditorSchemeOneDark
+  );
+
 type
+  TEditorColorScheme = record
+    Background   : TColor;
+    Text         : TColor;
+    Keyword      : TColor;
+    KeywordStyle : TFontStyles;
+    Comment      : TColor;
+    CommentStyle : TFontStyles;
+    Str          : TColor;
+    Number       : TColor;
+    Directive    : TColor;
+    DirectiveStyle: TFontStyles;
+    AsmColor     : TColor;
+  end;
+
   TComboBox = class(StdCtrls.TComboBox)
   protected {private}
     FOnBeforeWheel: TNotifyEvent;
@@ -44,7 +80,6 @@ type
     lblPosition: TLabel;
     btnSave: TButton;
     dlgSave: TSaveDialog;
-    Editor: TMemo;
     chkScriptsSubDir: TCheckBox;
     edFilter: TEdit;
     lblScript: TLabel;
@@ -71,6 +106,7 @@ type
     procedure EditorKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure EditorKeyPress(Sender: TObject; var Key: Char);
   private
+    Editor: TSynMemo;
     Highlighter : TSynPasSyn;
     ScriptSelectionChanged : Boolean;
     LastCloseUp : UInt64;
@@ -82,12 +118,12 @@ type
     function Dedent(aText: string; aPrefix: string): string;
     procedure DoScriptSelectionChange;
   public
-    { Public declarations }
     Path: string;
     LastUsedScript: string;
     Script: string;
     procedure UpdateCaretPos;
     procedure ReadScriptsList;
+    procedure SetColorScheme(const AScheme: string);
   end;
 
 var
@@ -96,6 +132,9 @@ var
 implementation
 
 {$R *.dfm}
+
+uses
+  wbInterface;
 
 procedure TfrmScript.btnSaveClick(Sender: TObject);
 var
@@ -263,8 +302,7 @@ end;
 
 procedure TfrmScript.UpdateCaretPos;
 begin
-  with Editor.CaretPos do
-    lblPosition.Caption := Format('Line:%d Col:%d', [y, x]);
+  lblPosition.Caption := Format('Line:%d Col:%d', [Editor.CaretY, Editor.CaretX]);
 end;
 
 procedure TfrmScript.EditorMouseUp(Sender: TObject; Button: TMouseButton;
@@ -419,15 +457,130 @@ begin
   end;
 end;
 
+procedure TfrmScript.SetColorScheme(const AScheme: string);
+const
+  // Light schemes
+  csDelphiClassic: TEditorColorScheme = (
+    Background: $00FFFFFF; Text: $00000000;
+    Keyword: $00800000; KeywordStyle: [fsBold];
+    Comment: $00008000; CommentStyle: [fsItalic];
+    Str: $00000080; Number: $00800000;
+    Directive: $00808000; DirectiveStyle: [fsItalic];
+    AsmColor: $00800000
+  );
+  csVisualStudio: TEditorColorScheme = (
+    Background: $00FFFFFF; Text: $00000000;
+    Keyword: $00FF0000; KeywordStyle: [fsBold];
+    Comment: $00008000; CommentStyle: [fsItalic];
+    Str: $001515A3; Number: $00588609;
+    Directive: $00DB00AF; DirectiveStyle: [fsItalic];
+    AsmColor: $00FF0000
+  );
+  csSolarizedLight: TEditorColorScheme = (
+    Background: $00E3F6FD; Text: $00837B65;
+    Keyword: $00D28B26; KeywordStyle: [fsBold];
+    Comment: $00A1A193; CommentStyle: [fsItalic];
+    Str: $0098A12A; Number: $008236D3;
+    Directive: $00164BCB; DirectiveStyle: [fsItalic];
+    AsmColor: $00D28B26
+  );
+  // Dark schemes
+  csVSCodeDark: TEditorColorScheme = (
+    Background: $001E1E1E; Text: $00D4D4D4;
+    Keyword: $00D69C56; KeywordStyle: [fsBold];
+    Comment: $0055996A; CommentStyle: [fsItalic];
+    Str: $007891CE; Number: $00A8CEB5;
+    Directive: $00C086C5; DirectiveStyle: [fsItalic];
+    AsmColor: $00D69C56
+  );
+  csMonokai: TEditorColorScheme = (
+    Background: $00222827; Text: $00F2F8F8;
+    Keyword: $007226F9; KeywordStyle: [fsBold];
+    Comment: $005E7175; CommentStyle: [fsItalic];
+    Str: $0074DBE6; Number: $00FF81AE;
+    Directive: $002EE2A6; DirectiveStyle: [fsItalic];
+    AsmColor: $00E8D966
+  );
+  csOneDark: TEditorColorScheme = (
+    Background: $00342C28; Text: $00BFB2AB;
+    Keyword: $00DD78C6; KeywordStyle: [fsBold];
+    Comment: $0070635C; CommentStyle: [fsItalic];
+    Str: $0079C398; Number: $00669AD1;
+    Directive: $007BC0E5; DirectiveStyle: [fsItalic];
+    AsmColor: $00EFAF61
+  );
+var
+  Scheme: string;
+  CS: TEditorColorScheme;
+begin
+  Scheme := AScheme;
+  if Scheme = cEditorSchemeAuto then
+    if wbDarkMode then
+      Scheme := cEditorSchemeVSCodeDark
+    else
+      Scheme := cEditorSchemeDelphiClassic;
+
+  if      Scheme = cEditorSchemeDelphiClassic  then CS := csDelphiClassic
+  else if Scheme = cEditorSchemeVisualStudio   then CS := csVisualStudio
+  else if Scheme = cEditorSchemeSolarizedLight then CS := csSolarizedLight
+  else if Scheme = cEditorSchemeVSCodeDark     then CS := csVSCodeDark
+  else if Scheme = cEditorSchemeMonokai        then CS := csMonokai
+  else if Scheme = cEditorSchemeOneDark        then CS := csOneDark
+  else Exit;
+
+  Editor.Color := CS.Background;
+  Editor.Font.Color := CS.Text;
+
+  with Highlighter do begin
+    KeyAttri.Style           := CS.KeywordStyle;
+    KeyAttri.Foreground      := CS.Keyword;
+    CommentAttri.Style       := CS.CommentStyle;
+    CommentAttri.Foreground  := CS.Comment;
+    StringAttri.Foreground   := CS.Str;
+    CharAttri.Foreground     := CS.Str;
+    NumberAttri.Foreground   := CS.Number;
+    FloatAttri.Foreground    := CS.Number;
+    HexAttri.Foreground      := CS.Number;
+    DirectiveAttri.Style     := CS.DirectiveStyle;
+    DirectiveAttri.Foreground := CS.Directive;
+    AsmAttri.Foreground      := CS.AsmColor;
+    IdentifierAttri.Foreground := clNone;
+    SymbolAttri.Foreground     := clNone;
+  end;
+
+  Editor.Invalidate;
+end;
+
 procedure TfrmScript.FormCreate(Sender: TObject);
 begin
   cmbScripts.OnBeforeWheel := cmbScriptsBeforeWheel;
   cmbScripts.OnAfterWheel := cmbScriptsAfterWheel;
 
+  Editor := TSynMemo.Create(Self);
+  Editor.Parent := Self;
+  Editor.Align := alClient;
+  Editor.Font.Name := 'Courier New';
+  Editor.Font.Height := -11;
+  Editor.ParentFont := False;
+  Editor.ScrollBars := ssBoth;
+  Editor.TabOrder := 3;
+  Editor.WantTabs := True;
+  Editor.WordWrap := False;
+  Editor.OnKeyDown := EditorKeyDown;
+  Editor.OnKeyPress := EditorKeyPress;
+  Editor.OnKeyUp := EditorKeyUp;
+  Editor.OnMouseUp := EditorMouseUp;
+
   Highlighter := TSynPasSyn.Create(Self);
   Editor.Highlighter := Highlighter;
+  SetColorScheme(cEditorSchemeAuto);
   if frmMain.MonospaceFontName <> '' then
     Editor.Font.Name := frmMain.MonospaceFontName;
+
+  Editor.Gutter.ShowLineNumbers := True;
+  Editor.Gutter.AutoSize := True;
+  Editor.Gutter.Visible := False;
+  Editor.Gutter.Visible := True;
 end;
 
 procedure TfrmScript.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);

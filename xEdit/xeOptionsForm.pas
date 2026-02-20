@@ -72,6 +72,7 @@ type
     cbRequireCtrlForDblClick: TCheckBox;
     cbFocusAddedElement: TCheckBox;
     tbsUITheme: TTabSheet;
+    gbTheme: TGroupBox;
     pnlThemeTop: TPanel;
     rbThemeSystem: TRadioButton;
     cbThemeSystem: TComboBox;
@@ -80,6 +81,14 @@ type
     rbThemeDark: TRadioButton;
     cbThemeDark: TComboBox;
     pnlThemePreview: TPanel;
+    gbEditorColorScheme: TGroupBox;
+    pnlEditorSchemeTop: TPanel;
+    rbSchemeSystem: TRadioButton;
+    cbSchemeSystem: TComboBox;
+    rbSchemeLight: TRadioButton;
+    cbSchemeLight: TComboBox;
+    rbSchemeDark: TRadioButton;
+    cbSchemeDark: TComboBox;
     cbPatron: TCheckBox;
     cbNoGitHubCheck: TCheckBox;
     cbNoNexusModsCheck: TCheckBox;
@@ -145,6 +154,7 @@ type
     procedure pnlFontRecordsClick(Sender: TObject);
     procedure rbThemeClick(Sender: TObject);
     procedure cbThemeSystemSelect(Sender: TObject);
+    procedure rbSchemeClick(Sender: TObject);
   private
     vspThemePreview: TVisualStylePreview;
     procedure UpdateThemePreview;
@@ -152,6 +162,7 @@ type
     { Public declarations }
     _Files: PwbFiles ;
     function GetSelectedTheme: string;
+    function GetSelectedColorScheme: string;
   end;
 
 implementation
@@ -273,7 +284,42 @@ begin
 
     UpdateThemePreview;
   end else
-    tbsUITheme.TabVisible := False;
+    gbTheme.Visible := False;
+
+  // Populate editor color scheme combos
+  for s in ['Auto'] do
+    cbSchemeSystem.Items.Add(s);
+  for s in ['Delphi Classic', 'Visual Studio', 'Solarized Light'] do
+    cbSchemeLight.Items.Add(s);
+  for s in ['VS Code Dark', 'Monokai', 'One Dark'] do
+    cbSchemeDark.Items.Add(s);
+
+  // Select saved scheme
+  var SavedScheme := frmMain.Settings.ReadString('UI', 'EditorColorScheme', 'Auto');
+  var SchemeIdx := cbSchemeSystem.Items.IndexOf(SavedScheme);
+  if SchemeIdx >= 0 then begin
+    rbSchemeSystem.Checked := True;
+    cbSchemeSystem.ItemIndex := SchemeIdx;
+  end else begin
+    SchemeIdx := cbSchemeLight.Items.IndexOf(SavedScheme);
+    if SchemeIdx >= 0 then begin
+      rbSchemeLight.Checked := True;
+      cbSchemeLight.ItemIndex := SchemeIdx;
+    end else begin
+      SchemeIdx := cbSchemeDark.Items.IndexOf(SavedScheme);
+      if SchemeIdx >= 0 then begin
+        rbSchemeDark.Checked := True;
+        cbSchemeDark.ItemIndex := SchemeIdx;
+      end else begin
+        rbSchemeSystem.Checked := True;
+        cbSchemeSystem.ItemIndex := 0;
+      end;
+    end;
+  end;
+
+  cbSchemeSystem.Enabled := rbSchemeSystem.Checked;
+  cbSchemeLight.Enabled  := rbSchemeLight.Checked;
+  cbSchemeDark.Enabled   := rbSchemeDark.Checked;
 
   for ct := ctNotDefined to High(TConflictThis) do
     cbConflictThis.Items.AddObject(Copy(GetEnumName(TypeInfo(TConflictThis), Integer(ct)), 3, 100), Pointer(ct));
@@ -329,6 +375,25 @@ begin
   cbThemeLight.Enabled := rbThemeLight.Checked;
   cbThemeDark.Enabled := rbThemeDark.Checked;
   UpdateThemePreview;
+end;
+
+procedure TfrmOptions.rbSchemeClick(Sender: TObject);
+begin
+  cbSchemeSystem.Enabled := rbSchemeSystem.Checked;
+  cbSchemeLight.Enabled  := rbSchemeLight.Checked;
+  cbSchemeDark.Enabled   := rbSchemeDark.Checked;
+end;
+
+function TfrmOptions.GetSelectedColorScheme: string;
+begin
+  if rbSchemeSystem.Checked then
+    Result := cbSchemeSystem.Text
+  else if rbSchemeLight.Checked then
+    Result := cbSchemeLight.Text
+  else if rbSchemeDark.Checked then
+    Result := cbSchemeDark.Text
+  else
+    Result := 'Auto';
 end;
 
 procedure TfrmOptions.UpdateThemePreview;

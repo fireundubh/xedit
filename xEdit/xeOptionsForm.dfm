@@ -820,81 +820,160 @@ object frmOptions: TfrmOptions
       end
     end
     object tbsUITheme: TTabSheet
-      Caption = 'UI Theme'
+      Caption = 'Appearance'
       ImageIndex = 3
-      object pnlThemeTop: TPanel
+      object gbTheme: TGroupBox
         AlignWithMargins = True
         Left = 3
         Top = 3
         Width = 452
-        Height = 46
+        Height = 73
         Align = alTop
-        BevelOuter = bvNone
+        Caption = 'Theme'
         TabOrder = 0
-        object rbThemeSystem: TRadioButton
-          Left = 0
-          Top = 1
-          Width = 65
-          Height = 17
-          Caption = '&System'
+        object pnlThemeTop: TPanel
+          Left = 2
+          Top = 17
+          Width = 448
+          Height = 46
+          Align = alClient
+          BevelOuter = bvNone
           TabOrder = 0
-          OnClick = rbThemeClick
+          object rbThemeSystem: TRadioButton
+            Left = 0
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = '&System'
+            TabOrder = 0
+            OnClick = rbThemeClick
+          end
+          object cbThemeSystem: TComboBox
+            Left = 0
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 1
+            OnSelect = cbThemeSystemSelect
+          end
+          object rbThemeLight: TRadioButton
+            Left = 151
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Light'
+            TabOrder = 2
+            OnClick = rbThemeClick
+          end
+          object cbThemeLight: TComboBox
+            Left = 151
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 3
+            OnSelect = cbThemeSystemSelect
+          end
+          object rbThemeDark: TRadioButton
+            Left = 302
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Dark'
+            TabOrder = 4
+            OnClick = rbThemeClick
+          end
+          object cbThemeDark: TComboBox
+            Left = 302
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 5
+            OnSelect = cbThemeSystemSelect
+          end
         end
-        object cbThemeSystem: TComboBox
-          Left = 0
-          Top = 24
-          Width = 145
-          Height = 21
-          Style = csDropDownList
-          TabOrder = 1
-          OnSelect = cbThemeSystemSelect
-        end
-        object rbThemeLight: TRadioButton
-          Left = 151
-          Top = 1
-          Width = 65
-          Height = 17
-          Caption = 'Light'
-          TabOrder = 2
-          OnClick = rbThemeClick
-        end
-        object cbThemeLight: TComboBox
-          Left = 151
-          Top = 24
-          Width = 145
-          Height = 21
-          Style = csDropDownList
-          TabOrder = 3
-          OnSelect = cbThemeSystemSelect
-        end
-        object rbThemeDark: TRadioButton
-          Left = 302
-          Top = 1
-          Width = 65
-          Height = 17
-          Caption = 'Dark'
-          TabOrder = 4
-          OnClick = rbThemeClick
-        end
-        object cbThemeDark: TComboBox
-          Left = 302
-          Top = 24
-          Width = 145
-          Height = 21
-          Style = csDropDownList
-          TabOrder = 5
-          OnSelect = cbThemeSystemSelect
+      end
+      object gbEditorColorScheme: TGroupBox
+        AlignWithMargins = True
+        Left = 3
+        Top = 82
+        Width = 452
+        Height = 73
+        Align = alTop
+        Caption = 'Editor Color Scheme'
+        TabOrder = 1
+        object pnlEditorSchemeTop: TPanel
+          Left = 2
+          Top = 17
+          Width = 448
+          Height = 46
+          Align = alClient
+          BevelOuter = bvNone
+          TabOrder = 0
+          object rbSchemeSystem: TRadioButton
+            Left = 0
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = '&System'
+            TabOrder = 0
+            OnClick = rbSchemeClick
+          end
+          object cbSchemeSystem: TComboBox
+            Left = 0
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 1
+          end
+          object rbSchemeLight: TRadioButton
+            Left = 151
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Light'
+            TabOrder = 2
+            OnClick = rbSchemeClick
+          end
+          object cbSchemeLight: TComboBox
+            Left = 151
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 3
+          end
+          object rbSchemeDark: TRadioButton
+            Left = 302
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Dark'
+            TabOrder = 4
+            OnClick = rbSchemeClick
+          end
+          object cbSchemeDark: TComboBox
+            Left = 302
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 5
+          end
         end
       end
       object pnlThemePreview: TPanel
         AlignWithMargins = True
         Left = 3
-        Top = 55
+        Top = 161
         Width = 452
-        Height = 311
+        Height = 205
         Align = alClient
         BevelOuter = bvLowered
-        TabOrder = 1
+        TabOrder = 2
       end
     end
     object tsExperts: TTabSheet

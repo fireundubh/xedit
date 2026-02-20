@@ -8725,6 +8725,7 @@ begin
     Path := wbScriptsPath;
     LastUsedScript := Settings.ReadString('View', 'LastUsedScript', '');
     chkScriptsSubDir.Checked := Settings.ReadBool('View', 'IncludeScriptsFromSubDir', False);
+    SetColorScheme(Settings.ReadString('UI', 'EditorColorScheme', cEditorSchemeAuto));
     if ShowModal <> mrOK then
       Exit;
     Scr := Script;
@@ -14199,6 +14200,9 @@ begin
 
     if wbThemesSupported then
       TStyleManager.TrySetStyle(GetSelectedTheme, False);
+
+    Settings.WriteString('UI', 'EditorColorScheme', GetSelectedColorScheme);
+    Settings.UpdateFile;
 
     vstNav.Font := pnlFontRecords.Font;
     vstView.Font := pnlFontRecords.Font;
