@@ -15,7 +15,9 @@ interface
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, StdCtrls, ExtCtrls, IOUtils, StrUtils, Vcl.ComCtrls, System.UITypes,
-  SynEdit, SynMemo, SynEditKeyCmds, xeMainForm, SynHighlighterPas;
+  Generics.Collections,
+  SynEdit, SynMemo, SynEditKeyCmds, xeMainForm, SynHighlighterPas,
+  VirtualTrees;
 
 const
   sNewScript = '<new script>';
@@ -45,6 +47,13 @@ const
   );
 
 type
+  TScriptNodeData = record
+    Name: string;
+    RelativePath: string;
+    IsFolder: Boolean;
+  end;
+  PScriptNodeData = ^TScriptNodeData;
+
   TEditorColorScheme = record
     Background   : TColor;
     Text         : TColor;
@@ -59,61 +68,44 @@ type
     AsmColor     : TColor;
   end;
 
-  TComboBox = class(StdCtrls.TComboBox)
-  protected {private}
-    FOnBeforeWheel: TNotifyEvent;
-    FOnAfterWheel: TNotifyEvent;
-  protected
-    procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
-
-    property OnBeforeWheel: TNotifyEvent read FOnBeforeWheel write FOnBeforeWheel;
-    property OnAfterWheel: TNotifyEvent read FOnAfterWheel write FOnAfterWheel;
-  end;
-
   TfrmScript = class(TForm)
-    pnlTop: TPanel;
-    cmbScripts: TComboBox;
+    pnlLeft: TPanel;
+    edFilter: TEdit;
+    vstScripts: TVirtualStringTree;
+    splLeft: TSplitter;
     pnlBottom: TPanel;
-    btnCancel: TButton;
+    btnNewScript: TButton;
+    btnSave: TButton;
     btnOK: TButton;
+    btnCancel: TButton;
     pnlStatus: TPanel;
     lblPosition: TLabel;
-    btnSave: TButton;
     dlgSave: TSaveDialog;
-    chkScriptsSubDir: TCheckBox;
-    edFilter: TEdit;
-    lblScript: TLabel;
-    lblFilter: TLabel;
+    procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
-    procedure cmbScriptsChange(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure edFilterChange(Sender: TObject);
+    procedure edFilterKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure vstScriptsGetText(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
+    procedure vstScriptsFreeNode(Sender: TBaseVirtualTree; Node: PVirtualNode);
+    procedure vstScriptsFocusChanged(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex);
+    procedure vstScriptsKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure vstScriptsDblClick(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
+    procedure btnNewScriptClick(Sender: TObject);
     procedure EditorKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure EditorMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure chkScriptsSubDirClick(Sender: TObject);
-    procedure edFilterChange(Sender: TObject);
-    procedure cmbScriptsSelect(Sender: TObject);
-    procedure cmbScriptsEnter(Sender: TObject);
-    procedure cmbScriptsExit(Sender: TObject);
-    procedure cmbScriptsCloseUp(Sender: TObject);
-    procedure cmbScriptsKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure edFilterKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure cmbScriptsDropDown(Sender: TObject);
-    procedure cmbScriptsBeforeWheel(Sender: TObject);
-    procedure cmbScriptsAfterWheel(Sender: TObject);
-    procedure FormCreate(Sender: TObject);
     procedure EditorKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure EditorKeyPress(Sender: TObject; var Key: Char);
   private
     Editor: TSynMemo;
-    Highlighter : TSynPasSyn;
-    ScriptSelectionChanged : Boolean;
-    LastCloseUp : UInt64;
-    SelectionOnDropDown: string;
-    ScriptSelectionChangedOnDropDown : Boolean;
-    SelectionOnEnter: string;
+    Highlighter: TSynPasSyn;
+    FUpdatingTree: Boolean;
+    FCurrentRelPath: string;
     SaveOverride: string;
+    function EnsureFolderNode(const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
+    function FirstScriptNode: PVirtualNode;
     function Indent(aText: string; aPrefix: string): string;
     function Dedent(aText: string; aPrefix: string): string;
     procedure DoScriptSelectionChange;
@@ -136,30 +128,64 @@ implementation
 uses
   wbInterface;
 
+procedure TfrmScript.btnNewScriptClick(Sender: TObject);
+begin
+  if Editor.Modified and (Editor.Text.Trim <> '') then
+    if MessageDlg('The current script has been modified. Do you want to save it before creating a new script?',
+                  mtConfirmation, mbYesNo, 0) = mrYes then
+      btnSaveClick(Self);
+
+  FUpdatingTree := True;
+  try
+    vstScripts.ClearSelection;
+    vstScripts.FocusedNode := nil;
+  finally
+    FUpdatingTree := False;
+  end;
+
+  FCurrentRelPath := '';
+  SaveOverride := sNewScript;
+  Editor.Lines.Clear;
+  with TStringList.Create do try
+    try
+      LoadFromFile(Path + sNewScriptName + sScriptExt);
+    except end;
+    Editor.Lines.Text := Text.Replace(#9, #32#32);
+  finally
+    Free;
+  end;
+  Editor.Modified := False;
+  Editor.SetFocus;
+  UpdateCaretPos;
+end;
+
 procedure TfrmScript.btnSaveClick(Sender: TObject);
 var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
   s, s2: string;
-  i: integer;
+  WasNewScript: Boolean;
 begin
-  if cmbScripts.ItemIndex = -1 then
-    Exit;
-
+  WasNewScript := False;
   s := SaveOverride;
-  if s = '' then
-    s := cmbScripts.Items[cmbScripts.ItemIndex];
+  if s = '' then begin
+    Node := vstScripts.FocusedNode;
+    if not Assigned(Node) then Exit;
+    Data := vstScripts.GetNodeData(Node);
+    if Data^.IsFolder or (Data^.RelativePath = '') then Exit;
+    s := Data^.RelativePath;
+  end;
 
   if s = sNewScript then begin
+    WasNewScript := True;
     dlgSave.InitialDir := Path;
     if dlgSave.Execute then begin
-      s := dlgSave.FileName;
-      s2 := ChangeFileExt(ExtractFileName(s), '');
-      i := cmbScripts.Items.IndexOf(s2);
-      if i = -1 then begin
-        cmbScripts.Items.Add(s2);
-        cmbScripts.ItemIndex := Pred(cmbScripts.Items.Count);
-      end else
-        cmbScripts.ItemIndex := i;
-      SaveOverride := s2;
+      s2 := dlgSave.FileName;
+      if s2.StartsWith(Path, True) then
+        s2 := ChangeFileExt(Copy(s2, Length(Path) + 1, MaxInt), '')
+      else
+        s2 := ChangeFileExt(ExtractFileName(s2), '');
+      s := Path + s2 + sScriptExt;
     end else
       Exit;
   end else
@@ -170,116 +196,54 @@ begin
     CopyFile(PChar(s), PChar(s + '.backup.' + FormatDateTime('yyyy_mm_dd_hh_nn_ss', Now)), True);
     SaveToFile(s);
     lblPosition.Caption := Format('Saved: %s', [ExtractFileName(s)]);
-    ScriptSelectionChanged := False;
     Editor.Modified := False;
   finally
     Free;
   end;
-end;
 
-procedure TfrmScript.cmbScriptsAfterWheel(Sender: TObject);
-begin
-  if not (cmbScripts.Focused or cmbScripts.DroppedDown) then begin
-    if SelectionOnEnter <> cmbScripts.Text then
-      ScriptSelectionChanged := True;
-    if ScriptSelectionChanged then
-      DoScriptSelectionChange;
+  if WasNewScript then begin
+    FCurrentRelPath := s2;
+    SaveOverride := '';
+    ReadScriptsList;
   end;
-end;
-
-procedure TfrmScript.cmbScriptsBeforeWheel(Sender: TObject);
-begin
-  if not (cmbScripts.Focused or cmbScripts.DroppedDown) then begin
-    ScriptSelectionChanged := False;
-    SelectionOnEnter := cmbScripts.Text;
-  end;
-end;
-
-procedure TfrmScript.cmbScriptsChange(Sender: TObject);
-begin
-  ScriptSelectionChanged := True;
-end;
-
-procedure TfrmScript.cmbScriptsCloseUp(Sender: TObject);
-begin
-  if ScriptSelectionChanged then
-    DoScriptSelectionChange
-  else
-    LastCloseUp := GetTickCount64;
-end;
-
-procedure TfrmScript.cmbScriptsDropDown(Sender: TObject);
-begin
-  SelectionOnDropDown := cmbScripts.Text;
-  ScriptSelectionChangedOnDropDown := ScriptSelectionChanged;
-end;
-
-procedure TfrmScript.cmbScriptsEnter(Sender: TObject);
-begin
-  ScriptSelectionChanged := False;
-  SelectionOnEnter := cmbScripts.Text;
-end;
-
-procedure TfrmScript.cmbScriptsExit(Sender: TObject);
-begin
-  if ScriptSelectionChanged then
-    DoScriptSelectionChange;
-end;
-
-procedure TfrmScript.cmbScriptsKeyDown(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
-begin
-  case Key of
-    VK_RETURN: begin
-      Key := 0;
-      if ScriptSelectionChanged then
-        DoScriptSelectionChange
-      else
-        Editor.SetFocus;
-    end;
-  end;
-end;
-
-procedure TfrmScript.cmbScriptsSelect(Sender: TObject);
-begin
-  ScriptSelectionChanged := True;
-  if (GetTickCount64 - LastCloseUp) < 50 then
-    DoScriptSelectionChange;
 end;
 
 procedure TfrmScript.DoScriptSelectionChange;
 var
-  s: string;
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+  NewRelPath, OldRelPath: string;
 begin
-  ScriptSelectionChanged := False;
-  if cmbScripts.ItemIndex = -1 then
-    Exit;
+  Node := vstScripts.FocusedNode;
+  if not Assigned(Node) then Exit;
+  Data := vstScripts.GetNodeData(Node);
+  if Data^.IsFolder then Exit;
 
-  s := cmbScripts.Items[cmbScripts.ItemIndex];
+  NewRelPath := Data^.RelativePath;
+  if SameText(NewRelPath, FCurrentRelPath) then Exit;
 
-  if Editor.Modified and (string(Editor.Text).Trim <> '') then
-    if MessageDlg('The previous script ("' + SaveOverride + '") has been modified. Do you want to save it before loading the new script?', mtConfirmation,mbYesNo, 0) = mrYes then
+  if Editor.Modified and (Editor.Text.Trim <> '') then begin
+    OldRelPath := FCurrentRelPath;
+    if MessageDlg('The previous script has been modified. Do you want to save it before loading the new script?',
+                  mtConfirmation, mbYesNo, 0) = mrYes then
       btnSaveClick(Self);
+    if FCurrentRelPath <> OldRelPath then
+      Exit;
+  end;
 
-  SaveOverride := s;
-  if s = sNewScript then
-    s := sNewScriptName;
-
+  FCurrentRelPath := NewRelPath;
+  SaveOverride := '';
   Editor.Lines.Clear;
-
   with TStringList.Create do try
     try
-      LoadFromFile(Path + s + sScriptExt);
+      LoadFromFile(Path + NewRelPath + sScriptExt);
     except end;
     Editor.Lines.Text := Text.Replace(#9, #32#32);
     Editor.Modified := False;
-    if not edFilter.Focused then
-      Editor.SetFocus;
     UpdateCaretPos;
   finally
     Free;
   end;
-  ScriptSelectionChanged := False;
 end;
 
 procedure TfrmScript.edFilterChange(Sender: TObject);
@@ -292,10 +256,9 @@ procedure TfrmScript.edFilterKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
   case Key of
-    VK_RETURN: begin
+    VK_RETURN, VK_DOWN: begin
       Key := 0;
-      cmbScripts.SetFocus;
-      cmbScripts.DroppedDown := True;
+      vstScripts.SetFocus;
     end;
   end;
 end;
@@ -380,80 +343,143 @@ begin
   UpdateCaretPos;
 end;
 
-procedure TfrmScript.chkScriptsSubDirClick(Sender: TObject);
+function TfrmScript.EnsureFolderNode(const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
+var
+  ParentPath: string;
+  ParentNode: PVirtualNode;
+  Data: PScriptNodeData;
 begin
-  if Self.Active then begin
-    ReadScriptsList;
-    cmbScripts.SetFocus;
+  if FolderNodes.TryGetValue(FolderPath, Result) then Exit;
+
+  ParentPath := ExtractFileDir(FolderPath);
+  if ParentPath = '' then
+    ParentNode := nil
+  else
+    ParentNode := EnsureFolderNode(ParentPath, FolderNodes);
+
+  Result := vstScripts.AddChild(ParentNode);
+  Data := vstScripts.GetNodeData(Result);
+  Data^.Name := ExtractFileName(FolderPath);
+  Data^.RelativePath := '';
+  Data^.IsFolder := True;
+  FolderNodes.Add(FolderPath, Result);
+end;
+
+function TfrmScript.FirstScriptNode: PVirtualNode;
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+begin
+  Result := nil;
+  Node := vstScripts.GetFirst;
+  while Assigned(Node) do begin
+    Data := vstScripts.GetNodeData(Node);
+    if not Data^.IsFolder then begin
+      Result := Node;
+      Exit;
+    end;
+    Node := vstScripts.GetNext(Node);
   end;
 end;
 
 procedure TfrmScript.ReadScriptsList;
 var
-  sl1, sl2: TStringList;
-  f, sname: string;
-  so: TSearchOption;
-  i : Integer;
-  s : string;
-  CurrentSelection: string;
+  FolderNodes: TDictionary<string, PVirtualNode>;
+  Files: TArray<string>;
+  f, sname, dirpart, leafname: string;
+  ScriptNode, SelectNode: PVirtualNode;
+  Data: PScriptNodeData;
+  FilterText, TargetRelPath: string;
 begin
-  CurrentSelection := cmbScripts.Text;
+  Path := IncludeTrailingPathDelimiter(Path);
 
-  sl1 := TStringList.Create;
-  sl2 := TStringList.Create;
+  TargetRelPath := '';
+  SelectNode := vstScripts.FocusedNode;
+  if Assigned(SelectNode) then begin
+    Data := vstScripts.GetNodeData(SelectNode);
+    if not Data^.IsFolder then
+      TargetRelPath := Data^.RelativePath;
+  end;
+  if TargetRelPath = '' then
+    TargetRelPath := LastUsedScript;
+
+  FUpdatingTree := True;
+  vstScripts.BeginUpdate;
+  vstScripts.Clear;
+  FolderNodes := TDictionary<string, PVirtualNode>.Create;
   try
-    if chkScriptsSubDir.Checked then
-      so := TSearchOption.soAllDirectories
-    else
-      so := TSearchOption.soTopDirectoryOnly;
-    for f in TDirectory.GetFiles(Path, '*' + sScriptExt, so) do begin
-      sname := ChangeFileExt(Copy(f, Length(Path) + 1, Length(f)), '');
-      if SameText(sNewScriptName, sname) then Continue;
-      if Pos('\', sname) <> 0 then
-        sl1.Add(sname)
-      else
-        sl2.Add(sname);
+    FilterText := edFilter.Text;
+    FilterText := FilterText.Trim.ToLower;
+    if TDirectory.Exists(Path) then begin
+      Files := TDirectory.GetFiles(Path, '*' + sScriptExt, TSearchOption.soAllDirectories);
+      TArray.Sort<string>(Files);
+      for f in Files do begin
+        sname := ChangeFileExt(Copy(f, Length(Path) + 1, MaxInt), '');
+        if SameText(sNewScriptName, sname) then Continue;
+        if (FilterText <> '') and not sname.ToLower.Contains(FilterText) then Continue;
+
+        dirpart := ExtractFileDir(sname);
+        leafname := ExtractFileName(sname);
+
+        if dirpart <> '' then
+          ScriptNode := vstScripts.AddChild(EnsureFolderNode(dirpart, FolderNodes))
+        else
+          ScriptNode := vstScripts.AddChild(nil);
+
+        Data := vstScripts.GetNodeData(ScriptNode);
+        Data^.Name := leafname;
+        Data^.RelativePath := sname;
+        Data^.IsFolder := False;
+      end;
     end;
-    sl1.Sort;
-    sl2.Sort;
-    sl1.AddStrings(sl2);
-    sl1.Insert(0, sNewScript);
-    s := edFilter.Text;
-    s := s.ToLower.Trim;
-    if s <> '' then
-      for i := Pred(sl1.Count) downto 0 do
-        if not sl1[i].ToLower.Contains(s) then
-          sl1.Delete(i);
-    cmbScripts.Items.Assign(sl1);
+    vstScripts.FullExpand;
   finally
-    sl1.Free;
-    sl2.Free;
+    FolderNodes.Free;
+    vstScripts.EndUpdate;
   end;
 
-  if CurrentSelection = '' then begin
-    CurrentSelection := LastUsedScript;
-    ScriptSelectionChanged := True;
+  SelectNode := nil;
+  if TargetRelPath <> '' then begin
+    var Node := vstScripts.GetFirst;
+    while Assigned(Node) do begin
+      Data := vstScripts.GetNodeData(Node);
+      if not Data^.IsFolder and SameText(Data^.RelativePath, TargetRelPath) then begin
+        SelectNode := Node;
+        Break;
+      end;
+      Node := vstScripts.GetNext(Node);
+    end;
+  end;
+  if not Assigned(SelectNode) then
+    SelectNode := FirstScriptNode;
+
+  vstScripts.FocusedNode := SelectNode;
+  if Assigned(SelectNode) then begin
+    vstScripts.Selected[SelectNode] := True;
+    vstScripts.ScrollIntoView(SelectNode, False);
   end;
 
-  i := cmbScripts.Items.IndexOf(CurrentSelection);
-  if i = -1 then begin
-    i := 0;
-    ScriptSelectionChanged := True;
-  end;
-  cmbScripts.ItemIndex := i;
-
-  if ScriptSelectionChanged then
+  FUpdatingTree := False;
+  if Assigned(SelectNode) then
     DoScriptSelectionChange;
 end;
 
 procedure TfrmScript.FormClose(Sender: TObject; var Action: TCloseAction);
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
 begin
   if ModalResult = mrOk then begin
     if Editor.Modified then
-      if MessageDlg('The script has been modified. Do you want to save it?', mtConfirmation,mbYesNo, 0) = mrYes then
+      if MessageDlg('The script has been modified. Do you want to save it?', mtConfirmation, mbYesNo, 0) = mrYes then
         btnSaveClick(Sender);
     Script := Editor.Lines.Text;
-    LastUsedScript := cmbScripts.Items[cmbScripts.ItemIndex];
+    Node := vstScripts.FocusedNode;
+    if Assigned(Node) then begin
+      Data := vstScripts.GetNodeData(Node);
+      if not Data^.IsFolder then
+        LastUsedScript := Data^.RelativePath;
+    end;
   end;
 end;
 
@@ -553,8 +579,7 @@ end;
 
 procedure TfrmScript.FormCreate(Sender: TObject);
 begin
-  cmbScripts.OnBeforeWheel := cmbScriptsBeforeWheel;
-  cmbScripts.OnAfterWheel := cmbScriptsAfterWheel;
+  vstScripts.NodeDataSize := SizeOf(TScriptNodeData);
 
   Editor := TSynMemo.Create(Self);
   Editor.Parent := Self;
@@ -584,49 +609,65 @@ begin
 end;
 
 procedure TfrmScript.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-var
-  i: Integer;
 begin
   if Key = VK_ESCAPE then
     if edFilter.Focused then begin
       edFilter.Text := '';
       edFilterChange(Sender);
-    end else if cmbScripts.Focused then begin
-      if not cmbScripts.DroppedDown then begin
-        i := cmbScripts.Items.IndexOf(SelectionOnEnter);
-        if i < 0 then
-          i := 0;
-        if cmbScripts.ItemIndex <> i then begin
-          cmbScripts.ItemIndex := i;
-          ScriptSelectionChanged := False;
-        end;
-      end else
-        if SelectionOnDropDown <> cmbScripts.Text then begin
-          i := cmbScripts.Items.IndexOf(SelectionOnDropDown);
-          if i >= 0 then begin
-            cmbScripts.ItemIndex := i;
-            ScriptSelectionChanged := ScriptSelectionChangedOnDropDown;
-          end;
-        end;
     end else
       ModalResult := mrCancel;
 end;
 
 procedure TfrmScript.FormShow(Sender: TObject);
 begin
-  ScriptSelectionChanged := True;
   ReadScriptsList;
 end;
 
-{ TComboBox }
-
-procedure TComboBox.WMMouseWheel(var Message: TWMMouseWheel);
+procedure TfrmScript.vstScriptsDblClick(Sender: TObject);
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
 begin
-  if Assigned(FOnBeforeWheel) then
-    FOnBeforeWheel(Self);
-  inherited;
-  if Assigned(FOnAfterWheel) then
-    FOnAfterWheel(Self);
+  Node := vstScripts.FocusedNode;
+  if Assigned(Node) then begin
+    Data := vstScripts.GetNodeData(Node);
+    if not Data^.IsFolder then
+      Editor.SetFocus;
+  end;
+end;
+
+procedure TfrmScript.vstScriptsFocusChanged(Sender: TBaseVirtualTree;
+  Node: PVirtualNode; Column: TColumnIndex);
+begin
+  if FUpdatingTree or not Assigned(Node) then Exit;
+  DoScriptSelectionChange;
+end;
+
+procedure TfrmScript.vstScriptsFreeNode(Sender: TBaseVirtualTree; Node: PVirtualNode);
+var
+  Data: PScriptNodeData;
+begin
+  Data := Sender.GetNodeData(Node);
+  Finalize(Data^);
+end;
+
+procedure TfrmScript.vstScriptsGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
+  Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
+var
+  Data: PScriptNodeData;
+begin
+  if TextType <> ttNormal then Exit;
+  Data := Sender.GetNodeData(Node);
+  CellText := Data^.Name;
+end;
+
+procedure TfrmScript.vstScriptsKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if Key = VK_RETURN then begin
+    Key := 0;
+    Editor.SetFocus;
+  end;
 end;
 
 end.

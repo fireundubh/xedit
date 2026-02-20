@@ -1,10 +1,10 @@
 object frmScript: TfrmScript
   Left = 0
   Top = 0
-  BorderIcons = [biSystemMenu]
+  BorderIcons = [biSystemMenu, biMaximize]
   Caption = 'Apply Script'
-  ClientHeight = 429
-  ClientWidth = 682
+  ClientHeight = 600
+  ClientWidth = 900
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -18,126 +18,118 @@ object frmScript: TfrmScript
   OnKeyDown = FormKeyDown
   OnShow = FormShow
   TextHeight = 13
-  object pnlTop: TPanel
-    Left = 0
-    Top = 0
-    Width = 682
-    Height = 89
-    Align = alTop
-    BevelOuter = bvNone
-    TabOrder = 0
-    DesignSize = (
-      682
-      89)
-    object lblScript: TLabel
-      Left = 8
-      Top = 42
-      Width = 27
-      Height = 13
-      Caption = 'S&cript'
-      FocusControl = cmbScripts
-    end
-    object lblFilter: TLabel
-      Left = 8
-      Top = 14
-      Width = 24
-      Height = 13
-      Caption = '&Filter'
-      FocusControl = edFilter
-    end
-    object cmbScripts: TComboBox
-      Left = 41
-      Top = 38
-      Width = 553
-      Height = 21
-      Style = csDropDownList
-      Anchors = [akLeft, akTop, akRight]
-      DropDownCount = 30
-      TabOrder = 1
-      OnChange = cmbScriptsChange
-      OnCloseUp = cmbScriptsCloseUp
-      OnDropDown = cmbScriptsDropDown
-      OnEnter = cmbScriptsEnter
-      OnExit = cmbScriptsExit
-      OnKeyDown = cmbScriptsKeyDown
-      OnSelect = cmbScriptsSelect
-    end
-    object btnSave: TButton
-      Left = 600
-      Top = 36
-      Width = 75
-      Height = 25
-      Anchors = [akTop, akRight]
-      Caption = '&Save'
-      TabOrder = 3
-      OnClick = btnSaveClick
-    end
-    object chkScriptsSubDir: TCheckBox
-      Left = 41
-      Top = 62
-      Width = 192
-      Height = 17
-      Caption = '&Include scripts from subdirectories'
-      TabOrder = 2
-      OnClick = chkScriptsSubDirClick
-    end
-    object edFilter: TEdit
-      Left = 41
-      Top = 11
-      Width = 553
-      Height = 21
-      TabOrder = 0
-      OnChange = edFilterChange
-      OnKeyDown = edFilterKeyDown
-    end
-  end
   object pnlBottom: TPanel
     Left = 0
-    Top = 394
-    Width = 682
+    Top = 565
+    Width = 900
     Height = 35
     Align = alBottom
     BevelOuter = bvNone
-    TabOrder = 1
+    TabOrder = 0
     DesignSize = (
-      682
+      900
       35)
-    object btnCancel: TButton
-      Left = 600
+    object btnNewScript: TButton
+      Left = 8
+      Top = 6
+      Width = 90
+      Height = 25
+      Caption = '&New Script'
+      TabOrder = 0
+      OnClick = btnNewScriptClick
+    end
+    object btnSave: TButton
+      Left = 104
       Top = 6
       Width = 75
       Height = 25
-      Anchors = [akTop, akRight]
-      Caption = 'Cancel'
-      ModalResult = 2
-      TabOrder = 0
+      Caption = '&Save'
+      TabOrder = 1
+      OnClick = btnSaveClick
     end
     object btnOK: TButton
-      Left = 519
+      Left = 738
       Top = 6
       Width = 75
       Height = 25
       Anchors = [akTop, akRight]
       Caption = 'OK'
       ModalResult = 1
-      TabOrder = 1
+      TabOrder = 2
+    end
+    object btnCancel: TButton
+      Left = 819
+      Top = 6
+      Width = 75
+      Height = 25
+      Anchors = [akTop, akRight]
+      Caption = 'Cancel'
+      ModalResult = 2
+      TabOrder = 3
     end
   end
   object pnlStatus: TPanel
     Left = 0
-    Top = 373
-    Width = 682
+    Top = 544
+    Width = 900
     Height = 21
     Align = alBottom
     BevelOuter = bvLowered
-    TabOrder = 2
+    TabOrder = 1
     object lblPosition: TLabel
       Left = 8
       Top = 4
-      Width = 633
+      Width = 884
       Height = 13
       AutoSize = False
     end
+  end
+  object pnlLeft: TPanel
+    Left = 0
+    Top = 0
+    Width = 220
+    Height = 544
+    Align = alLeft
+    BevelOuter = bvNone
+    TabOrder = 2
+    object edFilter: TEdit
+      Left = 0
+      Top = 0
+      Width = 220
+      Height = 21
+      Align = alTop
+      TabOrder = 0
+      TextHint = 'Search scripts...'
+      OnChange = edFilterChange
+      OnKeyDown = edFilterKeyDown
+    end
+    object vstScripts: TVirtualStringTree
+      Left = 0
+      Top = 21
+      Width = 220
+      Height = 523
+      Align = alClient
+      Header.AutoSizeIndex = 0
+      Header.Options = []
+      TabOrder = 1
+      TreeOptions.MiscOptions = [toFullRepaintOnResize, toInitOnSave, toToggleOnDblClick, toWheelPanning]
+      TreeOptions.PaintOptions = [toShowButtons, toShowDropmark, toShowRoot, toShowTreeLines, toThemeAware, toUseBlendedImages]
+      TreeOptions.SelectionOptions = [toFullRowSelect]
+      OnDblClick = vstScriptsDblClick
+      OnFocusChanged = vstScriptsFocusChanged
+      OnFreeNode = vstScriptsFreeNode
+      OnGetText = vstScriptsGetText
+      OnKeyDown = vstScriptsKeyDown
+    end
+  end
+  object splLeft: TSplitter
+    Left = 220
+    Top = 0
+    Width = 5
+    Height = 544
+    Align = alLeft
+    Cursor = crVSplit
+    ResizeStyle = rsUpdate
   end
   object dlgSave: TSaveDialog
     DefaultExt = 'pas'
