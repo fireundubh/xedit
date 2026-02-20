@@ -26,7 +26,7 @@ object frmOptions: TfrmOptions
     Top = 0
     Width = 466
     Height = 397
-    ActivePage = tsGeneral
+    ActivePage = tbsUITheme
     Align = alTop
     TabOrder = 0
     object tsGeneral: TTabSheet
@@ -190,6 +190,375 @@ object frmOptions: TfrmOptions
         Height = 17
         Caption = 'Hide Manual Cleaning functions'
         TabOrder = 17
+      end
+    end
+    object tbsUITheme: TTabSheet
+      Caption = 'Appearance'
+      ImageIndex = 3
+      object gbTheme: TGroupBox
+        AlignWithMargins = True
+        Left = 3
+        Top = 3
+        Width = 452
+        Height = 73
+        Align = alTop
+        Caption = 'Theme'
+        TabOrder = 0
+        object pnlThemeTop: TPanel
+          Left = 2
+          Top = 15
+          Width = 448
+          Height = 56
+          Align = alClient
+          BevelOuter = bvNone
+          TabOrder = 0
+          object rbThemeSystem: TRadioButton
+            Left = 0
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = '&System'
+            TabOrder = 0
+            OnClick = rbThemeClick
+          end
+          object cbThemeSystem: TComboBox
+            Left = 0
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 1
+            OnSelect = cbThemeSystemSelect
+          end
+          object rbThemeLight: TRadioButton
+            Left = 151
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Light'
+            TabOrder = 2
+            OnClick = rbThemeClick
+          end
+          object cbThemeLight: TComboBox
+            Left = 151
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 3
+            OnSelect = cbThemeSystemSelect
+          end
+          object rbThemeDark: TRadioButton
+            Left = 302
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Dark'
+            TabOrder = 4
+            OnClick = rbThemeClick
+          end
+          object cbThemeDark: TComboBox
+            Left = 302
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 5
+            OnSelect = cbThemeSystemSelect
+          end
+        end
+      end
+      object gbEditorColorScheme: TGroupBox
+        AlignWithMargins = True
+        Left = 3
+        Top = 82
+        Width = 452
+        Height = 73
+        Align = alTop
+        Caption = 'Editor Color Scheme'
+        TabOrder = 1
+        object pnlEditorSchemeTop: TPanel
+          Left = 2
+          Top = 15
+          Width = 448
+          Height = 56
+          Align = alClient
+          BevelOuter = bvNone
+          TabOrder = 0
+          object rbSchemeSystem: TRadioButton
+            Left = 0
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = '&System'
+            TabOrder = 0
+            OnClick = rbSchemeClick
+          end
+          object cbSchemeSystem: TComboBox
+            Left = 0
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 1
+          end
+          object rbSchemeLight: TRadioButton
+            Left = 151
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Light'
+            TabOrder = 2
+            OnClick = rbSchemeClick
+          end
+          object cbSchemeLight: TComboBox
+            Left = 151
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 3
+          end
+          object rbSchemeDark: TRadioButton
+            Left = 302
+            Top = 1
+            Width = 65
+            Height = 17
+            Caption = 'Dark'
+            TabOrder = 4
+            OnClick = rbSchemeClick
+          end
+          object cbSchemeDark: TComboBox
+            Left = 302
+            Top = 24
+            Width = 145
+            Height = 21
+            Style = csDropDownList
+            TabOrder = 5
+          end
+        end
+      end
+      object pnlThemePreview: TPanel
+        AlignWithMargins = True
+        Left = 3
+        Top = 161
+        Width = 452
+        Height = 205
+        Align = alClient
+        BevelOuter = bvLowered
+        TabOrder = 2
+      end
+    end
+    object tsUISettings: TTabSheet
+      Caption = 'Display'
+      ImageIndex = 2
+      object Label3: TLabel
+        Left = 16
+        Top = 40
+        Width = 89
+        Height = 13
+        Caption = 'Conflict Color Font'
+      end
+      object Label4: TLabel
+        Left = 16
+        Top = 96
+        Width = 123
+        Height = 13
+        Caption = 'Conflict Color Background'
+      end
+      object Label5: TLabel
+        Left = 18
+        Top = 216
+        Width = 66
+        Height = 13
+        Caption = 'Column Width'
+      end
+      object Label6: TLabel
+        Left = 159
+        Top = 215
+        Width = 55
+        Height = 13
+        Caption = 'Row Height'
+      end
+      object Label7: TLabel
+        Left = 16
+        Top = 259
+        Width = 249
+        Height = 13
+        Caption = 'Auto "Compare Selected" when multi-selecting up to'
+      end
+      object Label8: TLabel
+        Left = 375
+        Top = 259
+        Width = 36
+        Height = 13
+        Caption = 'records'
+      end
+      object Label9: TLabel
+        Left = 16
+        Top = 291
+        Width = 330
+        Height = 13
+        Caption =
+          'Delay updating View when navigation treeview selection changes b' +
+          'y '
+      end
+      object Label10: TLabel
+        Left = 431
+        Top = 291
+        Width = 24
+        Height = 13
+        Caption = 'msec'
+      end
+      object clbConflictThis: TColorBox
+        Left = 223
+        Top = 59
+        Width = 114
+        Height = 22
+        Style = [cbStandardColors, cbExtendedColors, cbIncludeDefault, cbCustomColor, cbPrettyNames, cbCustomColors]
+        TabOrder = 2
+        OnChange = clbConflictThisChange
+      end
+      object cbConflictThis: TComboBox
+        Left = 16
+        Top = 59
+        Width = 201
+        Height = 21
+        Style = csDropDownList
+        TabOrder = 1
+        OnChange = cbConflictThisChange
+      end
+      object cbConflictAll: TComboBox
+        Left = 16
+        Top = 115
+        Width = 201
+        Height = 21
+        Style = csDropDownList
+        TabOrder = 3
+        OnChange = cbConflictAllChange
+      end
+      object clbConflictAll: TColorBox
+        Left = 223
+        Top = 115
+        Width = 114
+        Height = 22
+        Style = [cbStandardColors, cbExtendedColors, cbIncludeDefault, cbCustomColor, cbPrettyNames, cbCustomColors]
+        TabOrder = 4
+        OnChange = clbConflictAllChange
+      end
+      object pnlFontRecords: TPanel
+        Left = 16
+        Top = 160
+        Width = 137
+        Height = 33
+        Cursor = crHandPoint
+        BevelKind = bkFlat
+        BevelOuter = bvNone
+        Caption = 'Records font'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentFont = False
+        TabOrder = 5
+        OnClick = pnlFontRecordsClick
+      end
+      object pnlFontMessages: TPanel
+        Left = 159
+        Top = 160
+        Width = 137
+        Height = 33
+        Cursor = crHandPoint
+        BevelKind = bkFlat
+        BevelOuter = bvNone
+        Caption = 'Messages font'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentFont = False
+        TabOrder = 6
+        OnClick = pnlFontRecordsClick
+      end
+      object pnlFontViewer: TPanel
+        Left = 302
+        Top = 160
+        Width = 137
+        Height = 33
+        Cursor = crHandPoint
+        BevelKind = bkFlat
+        BevelOuter = bvNone
+        Caption = 'Viewer font'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentFont = False
+        TabOrder = 7
+        OnClick = pnlFontRecordsClick
+      end
+      object edColumnWidth: TEdit
+        Left = 92
+        Top = 212
+        Width = 51
+        Height = 21
+        TabOrder = 8
+      end
+      object edRowHeight: TEdit
+        Left = 223
+        Top = 212
+        Width = 51
+        Height = 21
+        TabOrder = 9
+      end
+      object sedAutoCompareSelectedLimit: TSpinEdit
+        Left = 297
+        Top = 255
+        Width = 64
+        Height = 22
+        MaxValue = 999999
+        MinValue = 0
+        TabOrder = 10
+        Value = 0
+      end
+      object sedNavChangeDelay: TSpinEdit
+        Left = 360
+        Top = 288
+        Width = 59
+        Height = 22
+        MaxValue = 999999
+        MinValue = 0
+        TabOrder = 11
+        Value = 0
+      end
+      object cbRequireCtrlForDblClick: TCheckBox
+        Left = 16
+        Top = 321
+        Width = 280
+        Height = 17
+        Caption = 'Selection forms require holding CTRL for double click'
+        TabOrder = 12
+      end
+      object cbFocusAddedElement: TCheckBox
+        Left = 16
+        Top = 344
+        Width = 423
+        Height = 17
+        Caption =
+          'Focus newly added elements in View (can be inverted by holding C' +
+          'TRL)'
+        TabOrder = 13
+      end
+      object cbShrinkButtons: TCheckBox
+        Left = 16
+        Top = 12
+        Width = 439
+        Height = 17
+        Caption = 'Shrink SpeedButtons in the top right corner of the main form '
+        TabOrder = 0
       end
     end
     object tsViewSettings: TTabSheet
@@ -555,7 +924,7 @@ object frmOptions: TfrmOptions
         Top = 32
         Width = 385
         Height = 33
-        Caption = 
+        Caption =
           'Set enabled state opposite of player (deactivate at your own ris' +
           'k, this is a critical setting)'
         TabOrder = 0
@@ -605,375 +974,6 @@ object frmOptions: TfrmOptions
         Width = 82
         Height = 21
         TabOrder = 6
-      end
-    end
-    object tsUISettings: TTabSheet
-      Caption = 'UI Settings'
-      ImageIndex = 2
-      object Label3: TLabel
-        Left = 16
-        Top = 40
-        Width = 89
-        Height = 13
-        Caption = 'Conflict Color Font'
-      end
-      object Label4: TLabel
-        Left = 16
-        Top = 96
-        Width = 123
-        Height = 13
-        Caption = 'Conflict Color Background'
-      end
-      object Label5: TLabel
-        Left = 18
-        Top = 216
-        Width = 66
-        Height = 13
-        Caption = 'Column Width'
-      end
-      object Label6: TLabel
-        Left = 159
-        Top = 215
-        Width = 55
-        Height = 13
-        Caption = 'Row Height'
-      end
-      object Label7: TLabel
-        Left = 16
-        Top = 259
-        Width = 249
-        Height = 13
-        Caption = 'Auto "Compare Selected" when multi-selecting up to'
-      end
-      object Label8: TLabel
-        Left = 375
-        Top = 259
-        Width = 36
-        Height = 13
-        Caption = 'records'
-      end
-      object Label9: TLabel
-        Left = 16
-        Top = 291
-        Width = 330
-        Height = 13
-        Caption = 
-          'Delay updating View when navigation treeview selection changes b' +
-          'y '
-      end
-      object Label10: TLabel
-        Left = 431
-        Top = 291
-        Width = 24
-        Height = 13
-        Caption = 'msec'
-      end
-      object clbConflictThis: TColorBox
-        Left = 223
-        Top = 59
-        Width = 114
-        Height = 22
-        Style = [cbStandardColors, cbExtendedColors, cbIncludeDefault, cbCustomColor, cbPrettyNames, cbCustomColors]
-        TabOrder = 2
-        OnChange = clbConflictThisChange
-      end
-      object cbConflictThis: TComboBox
-        Left = 16
-        Top = 59
-        Width = 201
-        Height = 21
-        Style = csDropDownList
-        TabOrder = 1
-        OnChange = cbConflictThisChange
-      end
-      object cbConflictAll: TComboBox
-        Left = 16
-        Top = 115
-        Width = 201
-        Height = 21
-        Style = csDropDownList
-        TabOrder = 3
-        OnChange = cbConflictAllChange
-      end
-      object clbConflictAll: TColorBox
-        Left = 223
-        Top = 115
-        Width = 114
-        Height = 22
-        Style = [cbStandardColors, cbExtendedColors, cbIncludeDefault, cbCustomColor, cbPrettyNames, cbCustomColors]
-        TabOrder = 4
-        OnChange = clbConflictAllChange
-      end
-      object pnlFontRecords: TPanel
-        Left = 16
-        Top = 160
-        Width = 137
-        Height = 33
-        Cursor = crHandPoint
-        BevelKind = bkFlat
-        BevelOuter = bvNone
-        Caption = 'Records font'
-        Font.Charset = DEFAULT_CHARSET
-        Font.Color = clWindowText
-        Font.Height = -11
-        Font.Name = 'Tahoma'
-        Font.Style = []
-        ParentFont = False
-        TabOrder = 5
-        OnClick = pnlFontRecordsClick
-      end
-      object pnlFontMessages: TPanel
-        Left = 159
-        Top = 160
-        Width = 137
-        Height = 33
-        Cursor = crHandPoint
-        BevelKind = bkFlat
-        BevelOuter = bvNone
-        Caption = 'Messages font'
-        Font.Charset = DEFAULT_CHARSET
-        Font.Color = clWindowText
-        Font.Height = -11
-        Font.Name = 'Tahoma'
-        Font.Style = []
-        ParentFont = False
-        TabOrder = 6
-        OnClick = pnlFontRecordsClick
-      end
-      object pnlFontViewer: TPanel
-        Left = 302
-        Top = 160
-        Width = 137
-        Height = 33
-        Cursor = crHandPoint
-        BevelKind = bkFlat
-        BevelOuter = bvNone
-        Caption = 'Viewer font'
-        Font.Charset = DEFAULT_CHARSET
-        Font.Color = clWindowText
-        Font.Height = -11
-        Font.Name = 'Tahoma'
-        Font.Style = []
-        ParentFont = False
-        TabOrder = 7
-        OnClick = pnlFontRecordsClick
-      end
-      object edColumnWidth: TEdit
-        Left = 92
-        Top = 212
-        Width = 51
-        Height = 21
-        TabOrder = 8
-      end
-      object edRowHeight: TEdit
-        Left = 223
-        Top = 212
-        Width = 51
-        Height = 21
-        TabOrder = 9
-      end
-      object sedAutoCompareSelectedLimit: TSpinEdit
-        Left = 297
-        Top = 255
-        Width = 64
-        Height = 22
-        MaxValue = 999999
-        MinValue = 0
-        TabOrder = 10
-        Value = 0
-      end
-      object sedNavChangeDelay: TSpinEdit
-        Left = 360
-        Top = 288
-        Width = 59
-        Height = 22
-        MaxValue = 999999
-        MinValue = 0
-        TabOrder = 11
-        Value = 0
-      end
-      object cbRequireCtrlForDblClick: TCheckBox
-        Left = 16
-        Top = 321
-        Width = 280
-        Height = 17
-        Caption = 'Selection forms require holding CTRL for double click'
-        TabOrder = 12
-      end
-      object cbFocusAddedElement: TCheckBox
-        Left = 16
-        Top = 344
-        Width = 423
-        Height = 17
-        Caption = 
-          'Focus newly added elements in View (can be inverted by holding C' +
-          'TRL)'
-        TabOrder = 13
-      end
-      object cbShrinkButtons: TCheckBox
-        Left = 16
-        Top = 12
-        Width = 439
-        Height = 17
-        Caption = 'Shrink SpeedButtons in the top right corner of the main form '
-        TabOrder = 0
-      end
-    end
-    object tbsUITheme: TTabSheet
-      Caption = 'Appearance'
-      ImageIndex = 3
-      object gbTheme: TGroupBox
-        AlignWithMargins = True
-        Left = 3
-        Top = 3
-        Width = 452
-        Height = 73
-        Align = alTop
-        Caption = 'Theme'
-        TabOrder = 0
-        object pnlThemeTop: TPanel
-          Left = 2
-          Top = 17
-          Width = 448
-          Height = 46
-          Align = alClient
-          BevelOuter = bvNone
-          TabOrder = 0
-          object rbThemeSystem: TRadioButton
-            Left = 0
-            Top = 1
-            Width = 65
-            Height = 17
-            Caption = '&System'
-            TabOrder = 0
-            OnClick = rbThemeClick
-          end
-          object cbThemeSystem: TComboBox
-            Left = 0
-            Top = 24
-            Width = 145
-            Height = 21
-            Style = csDropDownList
-            TabOrder = 1
-            OnSelect = cbThemeSystemSelect
-          end
-          object rbThemeLight: TRadioButton
-            Left = 151
-            Top = 1
-            Width = 65
-            Height = 17
-            Caption = 'Light'
-            TabOrder = 2
-            OnClick = rbThemeClick
-          end
-          object cbThemeLight: TComboBox
-            Left = 151
-            Top = 24
-            Width = 145
-            Height = 21
-            Style = csDropDownList
-            TabOrder = 3
-            OnSelect = cbThemeSystemSelect
-          end
-          object rbThemeDark: TRadioButton
-            Left = 302
-            Top = 1
-            Width = 65
-            Height = 17
-            Caption = 'Dark'
-            TabOrder = 4
-            OnClick = rbThemeClick
-          end
-          object cbThemeDark: TComboBox
-            Left = 302
-            Top = 24
-            Width = 145
-            Height = 21
-            Style = csDropDownList
-            TabOrder = 5
-            OnSelect = cbThemeSystemSelect
-          end
-        end
-      end
-      object gbEditorColorScheme: TGroupBox
-        AlignWithMargins = True
-        Left = 3
-        Top = 82
-        Width = 452
-        Height = 73
-        Align = alTop
-        Caption = 'Editor Color Scheme'
-        TabOrder = 1
-        object pnlEditorSchemeTop: TPanel
-          Left = 2
-          Top = 17
-          Width = 448
-          Height = 46
-          Align = alClient
-          BevelOuter = bvNone
-          TabOrder = 0
-          object rbSchemeSystem: TRadioButton
-            Left = 0
-            Top = 1
-            Width = 65
-            Height = 17
-            Caption = '&System'
-            TabOrder = 0
-            OnClick = rbSchemeClick
-          end
-          object cbSchemeSystem: TComboBox
-            Left = 0
-            Top = 24
-            Width = 145
-            Height = 21
-            Style = csDropDownList
-            TabOrder = 1
-          end
-          object rbSchemeLight: TRadioButton
-            Left = 151
-            Top = 1
-            Width = 65
-            Height = 17
-            Caption = 'Light'
-            TabOrder = 2
-            OnClick = rbSchemeClick
-          end
-          object cbSchemeLight: TComboBox
-            Left = 151
-            Top = 24
-            Width = 145
-            Height = 21
-            Style = csDropDownList
-            TabOrder = 3
-          end
-          object rbSchemeDark: TRadioButton
-            Left = 302
-            Top = 1
-            Width = 65
-            Height = 17
-            Caption = 'Dark'
-            TabOrder = 4
-            OnClick = rbSchemeClick
-          end
-          object cbSchemeDark: TComboBox
-            Left = 302
-            Top = 24
-            Width = 145
-            Height = 21
-            Style = csDropDownList
-            TabOrder = 5
-          end
-        end
-      end
-      object pnlThemePreview: TPanel
-        AlignWithMargins = True
-        Left = 3
-        Top = 161
-        Width = 452
-        Height = 205
-        Align = alClient
-        BevelOuter = bvLowered
-        TabOrder = 2
       end
     end
     object tsExperts: TTabSheet
