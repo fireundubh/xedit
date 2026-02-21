@@ -336,13 +336,62 @@ begin
     Value := Element.Path;
 end;
 
+function BuildNamedPath(const aElement: IwbElement; aFromFile: Boolean): string;
+var
+  Rec: IwbRecord;
+  HasSig: IwbHasSignature;
+  Container: IwbContainer;
+  ContainerElem: IwbElement;
+  Segment: string;
+  ParentType: TwbElementType;
+begin
+  Result := '';
+  if not Assigned(aElement) then
+    Exit;
+
+  Container := aElement.Container;
+  if not Assigned(Container) then
+    Exit;
+
+  ContainerElem := Container as IwbElement;
+
+  // Recurse to parent
+  if not aFromFile and (ContainerElem.ElementType in [etFile, etGroupRecord]) then
+    // Stop — don't include file/group prefix
+  else
+    Result := BuildNamedPath(ContainerElem, aFromFile);
+
+  // Build segment for this element
+  if Supports(aElement, IwbRecord, Rec) then
+    Segment := Rec.DisplaySignature
+  else if Supports(aElement, IwbHasSignature, HasSig) then begin
+    var lSig: TwbSignature := HasSig.Signature;
+    Segment := string(AnsiString(PAnsiChar(@lSig[0])));
+    if Length(Segment) <> 4 then
+      Segment := '';
+  end;
+
+  if Segment = '' then begin
+    // No signature — use name for struct fields, index for array elements
+    ParentType := ContainerElem.ElementType;
+    if ParentType in [etSubRecordArray, etArray] then
+      Segment := '[' + IntToStr(Container.IndexOf(aElement)) + ']'
+    else
+      Segment := aElement.Name;
+  end;
+
+  if Result <> '' then
+    Result := Result + '\';
+  Result := Result + Segment;
+end;
+
 procedure IwbElement_IndexedPath(var Value: Variant; Args: TJvInterpreterArgs);
 var
   Element: IwbElement;
 begin
   Value := '';
   if Supports(IInterface(Args.Values[0]), IwbElement, Element) then
-    Value := Element.IndexedPath[Boolean(Args.Values[1])];
+    Value := BuildNamedPath(Element, Boolean(Args.Values[1]));
 end;
 
 procedure IwbElement_FullPath(var Value: Variant; Args: TJvInterpreterArgs);
@@ -954,6 +1003,40 @@ begin
   if Supports(IInterface(Args.Values[0]), IwbContainerElementRef, Container) then
     if Supports(IInterface(Args.Values[1]), IwbElement, Element) then
       Value := Container.IndexOf(Element);
+end;
+
+procedure IwbContainer_SortOrderOf(var Value: Variant; Args: TJvInterpreterArgs);
+var
+  Element: IwbElement;
+begin
+  Value := -1;
+  if Supports(IInterface(Args.Values[0]), IwbElement, Element) then
+    Value := Element.SortOrder;
+end;
+
+procedure IwbContainer_AssignByPath(var Value: Variant; Args: TJvInterpreterArgs);
+var
+  Container: IwbContainerElementRef;
+  Element: IwbElement;
+  Child, Source: IwbElement;
+  Path: string;
+begin
+  Value := Unassigned;
+  if not Supports(IInterface(Args.Values[0]), IwbContainerElementRef, Container) then
+    Exit;
+  Path := string(Args.Values[1]);
+  Source := nil;
+  if (V2O(Args.Values[2]) <> nil) then
+    Supports(IInterface(Args.Values[2]), IwbElement, Source);
+  if not Supports(Container, IwbElement, Element) then
+    Exit;
+  Child := Container.ElementByPath[Path];
+  if not Assigned(Child) and (Length(Path) = 4) then
+    Child := Container.ElementBySignature[StrToSignature(Path)];
+  if Assigned(Child) then
+    Value := Element.Assign(Child.SortOrder, Source, False)
+  else
+    Value := Element.Assign(High(Integer), Source, False);
 end;
 
 procedure IwbContainer_Add(var Value: Variant; Args: TJvInterpreterArgs);
@@ -2260,6 +2343,8 @@ begin
     AddFunction(cUnit, 'ElementExists', IwbContainer_ElementExists, 2, [varEmpty, varString], varEmpty);
     AddFunction(cUnit, 'LastElement', IwbContainer_LastElement, 1, [varEmpty], varEmpty);
     AddFunction(cUnit, 'IndexOf', IwbContainer_IndexOf, 2, [varEmpty, varEmpty], varEmpty);
+    AddFunction(cUnit, 'SortOrderOf', IwbContainer_SortOrderOf, 1, [varEmpty], varEmpty);
+    AddFunction(cUnit, 'AssignByPath', IwbContainer_AssignByPath, 3, [varEmpty, varString, varEmpty], varEmpty);
     AddFunction(cUnit, 'Add', IwbContainer_Add, 3, [varEmpty, varString, varBoolean], varEmpty);
     AddFunction(cUnit, 'AddElement', IwbContainer_AddElement, 2, [varEmpty, varEmpty], varEmpty);
     AddFunction(cUnit, 'InsertElement', IwbContainer_InsertElement, 3, [varEmpty, varInteger, varEmpty], varEmpty);

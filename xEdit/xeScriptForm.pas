@@ -120,6 +120,7 @@ type
     pmuInsertRef: TPopupMenu;
     pmuEditor: TPopupMenu;
     mniEditorInsertRef: TMenuItem;
+    FInsertRefCodes: TStringList;
     pnlStatusBar: TPanel;
     lblCaret: TLabel;
     lblModified: TLabel;
@@ -149,10 +150,11 @@ type
     procedure SaveSettings;
     procedure DoApplyAndClose;
     procedure btnToolInsertRefClick(Sender: TObject);
-    procedure pmuInsertRefTemplateClick(Sender: TObject);
-    function BuildRefCode: string;
+    procedure pmuInsertRefItemClick(Sender: TObject);
     function BuildNavRefCode(aElement: IwbElement): string;
-    function BuildViewRefCode(aElement: IwbElement): string;
+    procedure BuildViewRefPopup(aElement: IwbElement; const aPopupPos: TPoint; const aNavCode: string);
+    function GetSignatureStr(aElement: IwbElement): string;
+    function GetRelativePath(aElement: IwbElement; aMainRec: IwbMainRecord): string;
   public
     Path: string;
     LastUsedScript: string;
@@ -830,6 +832,7 @@ begin
   FExtraPaths := TStringList.Create;
   FExpandedNodes := TStringList.Create;
   FExpandedNodes.Sorted := True;
+  FInsertRefCodes := TStringList.Create;
 
   pmuTree := TPopupMenu.Create(Self);
   pmuTree.OnPopup := pmuTreePopup;
@@ -972,6 +975,7 @@ end;
 
 procedure TfrmScript.FormDestroy(Sender: TObject);
 begin
+  FreeAndNil(FInsertRefCodes);
   FreeAndNil(FExpandedNodes);
   FreeAndNil(FExtraPaths);
 end;
@@ -1160,23 +1164,49 @@ begin
   end;
 end;
 
-function TfrmScript.BuildRefCode: string;
+function TfrmScript.GetSignatureStr(aElement: IwbElement): string;
 var
-  Element: IwbElement;
+  Rec: IwbRecord;
+  HasSig: IwbHasSignature;
+  Sig: TwbSignature;
 begin
   Result := '';
-  Element := frmMain.GetFocusedViewElementSafely;
-  if Assigned(Element) and
-     not Supports(Element, IwbFile) and
-     not Supports(Element, IwbMainRecord) and
-     not Supports(Element, IwbGroupRecord) then begin
-    Result := BuildViewRefCode(Element);
-    if Result <> '' then
-      Exit;
+  if Supports(aElement, IwbRecord, Rec) then
+    Result := Rec.DisplaySignature
+  else if Supports(aElement, IwbHasSignature, HasSig) then begin
+    Sig := HasSig.Signature;
+    Result := string(AnsiString(PAnsiChar(@Sig[0])));
+    if Length(Result) <> 4 then
+      Result := '';
   end;
-  Element := frmMain.GetFocusedNavElementSafely;
-  if Assigned(Element) then
-    Result := BuildNavRefCode(Element);
+end;
+
+function TfrmScript.GetRelativePath(aElement: IwbElement; aMainRec: IwbMainRecord): string;
+var
+  ElemPath, OwnerPath: string;
+  Parts: TArray<string>;
+  i, DashPos: Integer;
+begin
+  Result := '';
+  ElemPath := aElement.Path;
+  OwnerPath := aMainRec.Path;
+  if (Length(ElemPath) > Length(OwnerPath)) and
+     SameText(Copy(ElemPath, 1, Length(OwnerPath)), OwnerPath) then begin
+    Result := Copy(ElemPath, Length(OwnerPath) + 1, MaxInt);
+    if Copy(Result, 1, 3) = ' \ ' then
+      Delete(Result, 1, 3)
+    else if (Result <> '') and (Result[1] = '\') then
+      Delete(Result, 1, 1);
+    Result := StringReplace(Result, ' \ ', '\', [rfReplaceAll]);
+    // Strip verbose names from signature segments: "ACBS - Configuration" -> "ACBS"
+    Parts := Result.Split(['\']);
+    for i := 0 to High(Parts) do begin
+      DashPos := Pos(' - ', Parts[i]);
+      if (DashPos = 5) and (Length(Parts[i]) >= 4) then
+        Parts[i] := Copy(Parts[i], 1, 4);
+    end;
+    Result := string.Join('\', Parts);
+  end;
 end;
 
 function TfrmScript.BuildNavRefCode(aElement: IwbElement): string;
@@ -1184,7 +1214,7 @@ var
   FileElem: IwbFile;
   MainRec: IwbMainRecord;
   GroupRec: IwbGroupRecord;
-  FormIDStr, EdID, FileName, ElemPath, OwnerPath, RelPath: string;
+  FormIDStr, EdID, FileName, RelPath: string;
 begin
   Result := '';
   if Supports(aElement, IwbFile, FileElem) then
@@ -1209,107 +1239,169 @@ begin
     end else begin
       MainRec := aElement.ContainingMainRecord;
       if Assigned(MainRec) then begin
-        ElemPath := aElement.Path;
-        OwnerPath := MainRec.Path;
-        if (Length(ElemPath) > Length(OwnerPath)) and
-           SameText(Copy(ElemPath, 1, Length(OwnerPath)), OwnerPath) then begin
-          RelPath := Copy(ElemPath, Length(OwnerPath) + 1, MaxInt);
-          if Copy(RelPath, 1, 3) = ' \ ' then
-            Delete(RelPath, 1, 3)
-          else if (RelPath <> '') and (RelPath[1] = '\') then
-            Delete(RelPath, 1, 1);
-          RelPath := StringReplace(RelPath, ' \ ', '\', [rfReplaceAll]);
-          if RelPath <> '' then
-            Result := 'ElementByPath(r, ''' + RelPath + ''')';
-        end;
+        RelPath := GetRelativePath(aElement, MainRec);
+        if RelPath <> '' then
+          Result := 'ElementByPath(r, ''' + RelPath + ''')';
       end;
     end;
   end;
 end;
 
-function TfrmScript.BuildViewRefCode(aElement: IwbElement): string;
+procedure TfrmScript.BuildViewRefPopup(aElement: IwbElement; const aPopupPos: TPoint; const aNavCode: string);
 var
   Templates: TwbTemplateElements;
   MainRec: IwbMainRecord;
-  ElemPath, MainRecPath, RelPath: string;
+  Container: IwbContainerBase;
+  ValDef: IwbValueDef;
+  Sig, RelPath, Accessor, Code: string;
+  HasLinksTo, UseEdit, UseNative: Boolean;
+  Sep: TMenuItem;
+  i: Integer;
+
+  procedure AddItem(const aCaption, aCode: string);
+  var
+    mni: TMenuItem;
+  begin
+    FInsertRefCodes.Add(aCode);
+    mni := TMenuItem.Create(pmuInsertRef);
+    mni.Caption := aCaption;
+    mni.Tag := FInsertRefCodes.Count - 1;
+    mni.OnClick := pmuInsertRefItemClick;
+    pmuInsertRef.Items.Add(mni);
+  end;
+
 begin
-  Result := '';
+  pmuInsertRef.Items.Clear;
+  FInsertRefCodes.Clear;
+
   Templates := aElement.GetAssignTemplates(High(Integer));
   if Length(Templates) > 0 then begin
-    if Length(Templates) = 1 then
-      Result := 'TemplateAssign(container, ''' + Templates[0].Name + ''')'
-    else
-      Result := #1;
-    Exit;
+    for i := 0 to High(Templates) do begin
+      Code := 'e := TemplateAssign(container, ''' + Templates[i].Name + ''');';
+      if Supports(Templates[i], IwbContainerBase, Container) then begin
+        var j: Integer;
+        for j := 0 to Pred(Container.ElementCount) do
+          Code := Code + sLineBreak + 'SetElementEditValues(e, ''' +
+            Container.Elements[j].Name + ''', '''');';
+      end;
+      AddItem(Templates[i].Name, Code);
+    end;
   end;
+
+  Sig := GetSignatureStr(aElement);
   MainRec := aElement.ContainingMainRecord;
-  if not Assigned(MainRec) then
-    Exit;
-  ElemPath := aElement.Path;
-  MainRecPath := MainRec.Path;
-  if (Length(ElemPath) > Length(MainRecPath)) and
-     SameText(Copy(ElemPath, 1, Length(MainRecPath)), MainRecPath) then begin
-    RelPath := Copy(ElemPath, Length(MainRecPath) + 1, MaxInt);
-    if Copy(RelPath, 1, 3) = ' \ ' then
-      Delete(RelPath, 1, 3)
-    else if (RelPath <> '') and (RelPath[1] = '\') then
-      Delete(RelPath, 1, 1);
-    RelPath := StringReplace(RelPath, ' \ ', '\', [rfReplaceAll]);
-    if RelPath <> '' then
-      Result := 'ElementByPath(r, ''' + RelPath + ''')';
+  if Assigned(MainRec) then begin
+    RelPath := GetRelativePath(aElement, MainRec);
+    if RelPath <> '' then begin
+      HasLinksTo := Assigned(aElement.LinksTo);
+      UseEdit := True;
+      UseNative := True;
+      ValDef := aElement.ValueDef;
+      if Assigned(ValDef) then
+        case ValDef.DefType of
+          dtString, dtLString, dtLenString, dtGuid:
+            UseNative := False;
+          dtInteger, dtIntegerFormater, dtIntegerFormaterUnion, dtFlag, dtFloat:
+            UseEdit := False;
+        end;
+      if pmuInsertRef.Items.Count > 0 then begin
+        Sep := TMenuItem.Create(pmuInsertRef);
+        Sep.Caption := '-';
+        pmuInsertRef.Items.Add(Sep);
+      end;
+      if (Sig <> '') and (Pos('\', RelPath) = 0) then begin
+        AddItem('Add', 'Add(r, ''' + Sig + ''', True)');
+        AddItem('AssignByPath', 'AssignByPath(r, ''' + Sig + ''', sourceElement)');
+        Accessor := 'ElementBySignature(r, ''' + Sig + ''')';
+        AddItem('ElementBySignature', Accessor);
+        if UseEdit then begin
+          AddItem('GetEditValue', 'GetEditValue(' + Accessor + ')');
+          AddItem('SetEditValue', 'SetEditValue(' + Accessor + ', value)');
+        end;
+        if UseNative then begin
+          AddItem('GetNativeValue', 'GetNativeValue(' + Accessor + ')');
+          AddItem('SetNativeValue', 'SetNativeValue(' + Accessor + ', value)');
+        end;
+        if HasLinksTo then
+          AddItem('LinksTo', 'LinksTo(' + Accessor + ')');
+      end else begin
+        AddItem('Add', 'Add(r, ''' + RelPath + ''', True)');
+        AddItem('AssignByPath', 'AssignByPath(r, ''' + RelPath + ''', sourceElement)');
+        AddItem('ElementByPath', 'ElementByPath(r, ''' + RelPath + ''')');
+        if UseEdit then begin
+          AddItem('GetElementEditValues', 'GetElementEditValues(r, ''' + RelPath + ''')');
+          AddItem('SetElementEditValues', 'SetElementEditValues(r, ''' + RelPath + ''', value)');
+        end;
+        if UseNative then begin
+          AddItem('GetElementNativeValues', 'GetElementNativeValues(r, ''' + RelPath + ''')');
+          AddItem('SetElementNativeValues', 'SetElementNativeValues(r, ''' + RelPath + ''', value)');
+        end;
+        if HasLinksTo then
+          AddItem('LinksTo', 'LinksTo(ElementByPath(r, ''' + RelPath + '''))');
+      end;
+    end;
   end;
+
+  if aNavCode <> '' then begin
+    if pmuInsertRef.Items.Count > 0 then begin
+      Sep := TMenuItem.Create(pmuInsertRef);
+      Sep.Caption := '-';
+      pmuInsertRef.Items.Add(Sep);
+    end;
+    AddItem('Nav Reference', aNavCode);
+  end;
+
+  if pmuInsertRef.Items.Count > 0 then
+    pmuInsertRef.Popup(aPopupPos.X, aPopupPos.Y);
 end;
 
 procedure TfrmScript.btnToolInsertRefClick(Sender: TObject);
 var
-  Code: string;
-  Element: IwbElement;
-  Templates: TwbTemplateElements;
-  i: Integer;
-  Item: TMenuItem;
+  ViewElem, NavElem: IwbElement;
+  NavCode: string;
   Pt: TPoint;
 begin
-  Code := BuildRefCode;
-  if Code = '' then begin
-    MessageDlg('No element selected in the main window.', mtInformation, [mbOK], 0);
+  ViewElem := frmMain.GetFocusedViewElementSafely;
+  if Assigned(ViewElem) and
+     (Supports(ViewElem, IwbFile) or
+      Supports(ViewElem, IwbMainRecord) or
+      Supports(ViewElem, IwbGroupRecord)) then
+    ViewElem := nil;
+
+  NavElem := frmMain.GetFocusedNavElementSafely;
+  NavCode := '';
+  if Assigned(NavElem) then
+    NavCode := BuildNavRefCode(NavElem);
+
+  if Assigned(ViewElem) then begin
+    if Sender = btnToolInsertRef then begin
+      Pt.X := 0;
+      Pt.Y := btnToolInsertRef.Height;
+      Pt := btnToolInsertRef.ClientToScreen(Pt);
+    end else
+      Pt := Mouse.CursorPos;
+    BuildViewRefPopup(ViewElem, Pt, NavCode);
     Exit;
   end;
-  if Code = #1 then begin
-    Element := frmMain.GetFocusedViewElementSafely;
-    if not Assigned(Element) then Exit;
-    Templates := Element.GetAssignTemplates(High(Integer));
-    if Length(Templates) = 0 then Exit;
-    pmuInsertRef.Items.Clear;
-    for i := 0 to High(Templates) do begin
-      Item := TMenuItem.Create(pmuInsertRef);
-      Item.Caption := Templates[i].Name;
-      Item.Tag := i;
-      Item.OnClick := pmuInsertRefTemplateClick;
-      pmuInsertRef.Items.Add(Item);
-    end;
-    Pt.X := 0;
-    Pt.Y := btnToolInsertRef.Height;
-    Pt := btnToolInsertRef.ClientToScreen(Pt);
-    pmuInsertRef.Popup(Pt.X, Pt.Y);
+
+  if NavCode <> '' then begin
+    Editor.SelText := NavCode;
+    Editor.SetFocus;
     Exit;
   end;
-  Editor.SelText := Code;
-  Editor.SetFocus;
+
+  MessageDlg('No element selected in the main window.', mtInformation, [mbOK], 0);
 end;
 
-procedure TfrmScript.pmuInsertRefTemplateClick(Sender: TObject);
+procedure TfrmScript.pmuInsertRefItemClick(Sender: TObject);
 var
-  Element: IwbElement;
-  Templates: TwbTemplateElements;
   Idx: Integer;
 begin
-  Element := frmMain.GetFocusedViewElementSafely;
-  if not Assigned(Element) then Exit;
-  Templates := Element.GetAssignTemplates(High(Integer));
   Idx := TMenuItem(Sender).Tag;
-  if (Idx < 0) or (Idx >= Length(Templates)) then Exit;
-  Editor.SelText := 'TemplateAssign(container, ''' + Templates[Idx].Name + ''')';
-  Editor.SetFocus;
+  if (Idx >= 0) and (Idx < FInsertRefCodes.Count) then begin
+    Editor.SelText := FInsertRefCodes[Idx];
+    Editor.SetFocus;
+  end;
 end;
 
 end.
