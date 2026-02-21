@@ -11,6 +11,7 @@ object frmScript: TfrmScript
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  FormStyle = fsStayOnTop
   KeyPreview = True
   Position = poMainFormCenter
   OnClose = FormClose
@@ -42,8 +43,8 @@ object frmScript: TfrmScript
       Height = 25
       Anchors = [akTop, akRight]
       Caption = 'OK'
-      ModalResult = 1
       TabOrder = 0
+      OnClick = btnOKClick
     end
     object btnCancel: TButton
       Left = 819
@@ -52,8 +53,8 @@ object frmScript: TfrmScript
       Height = 25
       Anchors = [akTop, akRight]
       Caption = 'Cancel'
-      ModalResult = 2
       TabOrder = 1
+      OnClick = btnCancelClick
     end
   end
   object pnlLeft: TPanel

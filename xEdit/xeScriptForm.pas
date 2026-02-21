@@ -14,7 +14,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ExtCtrls, Menus, IOUtils, StrUtils, ShellAPI,
+  Dialogs, StdCtrls, ExtCtrls, Menus, IOUtils, StrUtils, ShellAPI, IniFiles,
   Vcl.ComCtrls, Vcl.FileCtrl, System.UITypes, Generics.Collections,
   SynEdit, SynMemo, SynEditKeyCmds, SynEditTypes, xeMainForm,
   SynHighlighterPas, VirtualTrees, Buttons;
@@ -70,6 +70,9 @@ type
     AsmColor     : TColor;
   end;
 
+  TApplyScriptEvent = procedure(const aScriptName, aScript: string;
+    const aExtraPaths, aExpandedNodes: string; aRefByMode: Boolean) of object;
+
   TfrmScript = class(TForm)
     pnlLeft: TPanel;
     edFilter: TEdit;
@@ -93,6 +96,8 @@ type
     procedure vstScriptsDblClick(Sender: TObject);
     procedure EditorKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure EditorKeyPress(Sender: TObject; var Key: Char);
+    procedure btnOKClick(Sender: TObject);
+    procedure btnCancelClick(Sender: TObject);
   private
     Editor: TSynMemo;
     Highlighter: TSynPasSyn;
@@ -100,6 +105,7 @@ type
     FCurrentBasePath: string;
     FCurrentRelPath: string;
     SaveOverride: string;
+    FApplying: Boolean;
     FExtraPaths: TStringList;
     FExpandedNodes: TStringList;
     pmuTree: TPopupMenu;
@@ -136,12 +142,17 @@ type
     function GetNodeKey(Node: PVirtualNode): string;
     procedure SaveExpandedStates;
     procedure RestoreExpandedStates;
+    procedure SaveSettings;
+    procedure DoApplyAndClose;
   public
     Path: string;
     LastUsedScript: string;
     Script: string;
     ExtraPathsStr: string;
     ExpandedNodesStr: string;
+    RefByMode: Boolean;
+    Settings: TMemIniFile;
+    OnApplyScript: TApplyScriptEvent;
     procedure ReadScriptsList;
     procedure SetColorScheme(const AScheme: string);
   end;
@@ -655,26 +666,58 @@ begin
 end;
 
 procedure TfrmScript.FormClose(Sender: TObject; var Action: TCloseAction);
-var
-  Node: PVirtualNode;
-  Data: PScriptNodeData;
+begin
+  if not FApplying then begin
+    if Editor.Modified then
+      if MessageDlg('The script has been modified. Do you want to save it?', mtConfirmation, mbYesNo, 0) = mrYes then
+        btnSaveClick(Sender);
+    SaveSettings;
+    if Assigned(Settings) then begin
+      Settings.WriteString('View', 'ScriptExtraPaths', ExtraPathsStr);
+      Settings.WriteString('View', 'ScriptExpandedNodes', ExpandedNodesStr);
+      Settings.UpdateFile;
+    end;
+  end;
+  Action := caFree;
+end;
+
+procedure TfrmScript.SaveSettings;
 begin
   ExtraPathsStr := String.Join(';', FExtraPaths.ToStringArray);
   SaveExpandedStates;
   ExpandedNodesStr := String.Join('|', FExpandedNodes.ToStringArray);
+end;
 
-  if ModalResult = mrOk then begin
-    if Editor.Modified then
-      if MessageDlg('The script has been modified. Do you want to save it?', mtConfirmation, mbYesNo, 0) = mrYes then
-        btnSaveClick(Sender);
-    Script := Editor.Lines.Text;
-    Node := vstScripts.FocusedNode;
-    if Assigned(Node) then begin
-      Data := vstScripts.GetNodeData(Node);
-      if not Data^.IsFolder and not Data^.IsRoot then
-        LastUsedScript := Data^.BasePath + Data^.RelativePath;
-    end;
+procedure TfrmScript.DoApplyAndClose;
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+begin
+  FApplying := True;
+  if Editor.Modified then
+    if MessageDlg('The script has been modified. Do you want to save it?', mtConfirmation, mbYesNo, 0) = mrYes then
+      btnSaveClick(Self);
+  Script := Editor.Lines.Text;
+  Node := vstScripts.FocusedNode;
+  if Assigned(Node) then begin
+    Data := vstScripts.GetNodeData(Node);
+    if not Data^.IsFolder and not Data^.IsRoot then
+      LastUsedScript := Data^.BasePath + Data^.RelativePath;
   end;
+  SaveSettings;
+  if Assigned(OnApplyScript) then
+    OnApplyScript(LastUsedScript, Script, ExtraPathsStr, ExpandedNodesStr, RefByMode);
+  Release;
+end;
+
+procedure TfrmScript.btnOKClick(Sender: TObject);
+begin
+  DoApplyAndClose;
+end;
+
+procedure TfrmScript.btnCancelClick(Sender: TObject);
+begin
+  Close;
 end;
 
 procedure TfrmScript.SetColorScheme(const AScheme: string);
@@ -914,7 +957,7 @@ begin
       edFilter.Text := '';
       edFilterChange(Sender);
     end else
-      ModalResult := mrCancel;
+      Close;
 end;
 
 procedure TfrmScript.FormShow(Sender: TObject);

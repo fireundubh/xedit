@@ -890,6 +890,8 @@ type
     procedure ApplyScriptToSelection(aSelection: TNodeArray; aCount: Cardinal; const abShowMessages: boolean); overload;
     procedure ApplyScriptToSelection(aSelection: TDynElements; aCount: Cardinal; const abShowMessages: boolean); overload;
     procedure ApplyScript(const aScriptName: string; aScript: string; aRefByMode: Boolean = False);
+    procedure HandleApplyScript(const aScriptName, aScript: string;
+      const aExtraPaths, aExpandedNodes: string; aRefByMode: Boolean);
     procedure CreateActionsForScripts;
     function LOOTDirtyInfo(const aInfo: TLOOTPluginInfo; aFileChanged: Boolean): string;
     function BOSSDirtyInfo(const aInfo: TLOOTPluginInfo): string;
@@ -8718,32 +8720,35 @@ end;
 
 procedure TfrmMain.mniNavApplyScriptClick(Sender: TObject);
 var
-  ScriptName: string;
-  Scr: string;
+  i: Integer;
 begin
-  with TfrmScript.Create(Self) do try
-    Path := wbScriptsPath;
-    LastUsedScript := Settings.ReadString('View', 'LastUsedScript', '');
-    ExtraPathsStr := Settings.ReadString('View', 'ScriptExtraPaths', '');
-    ExpandedNodesStr := Settings.ReadString('View', 'ScriptExpandedNodes', '');
-    SetColorScheme(Settings.ReadString('UI', 'EditorColorScheme', cEditorSchemeAuto));
-    if ShowModal <> mrOK then begin
-      Settings.WriteString('View', 'ScriptExtraPaths', ExtraPathsStr);
-      Settings.WriteString('View', 'ScriptExpandedNodes', ExpandedNodesStr);
-      Settings.UpdateFile;
+  for i := 0 to Pred(Screen.FormCount) do
+    if Screen.Forms[i] is TfrmScript then begin
+      Screen.Forms[i].BringToFront;
       Exit;
     end;
-    Scr := Script;
-    ScriptName := LastUsedScript;
-    Settings.WriteString('View', 'LastUsedScript', LastUsedScript);
-    Settings.WriteString('View', 'ScriptExtraPaths', ExtraPathsStr);
-    Settings.WriteString('View', 'ScriptExpandedNodes', ExpandedNodesStr);
-    Settings.UpdateFile;
-    CreateActionsForScripts;
-  finally
-    Free;
+  with TfrmScript.Create(Self) do begin
+    Path := wbScriptsPath;
+    LastUsedScript := Self.Settings.ReadString('View', 'LastUsedScript', '');
+    ExtraPathsStr := Self.Settings.ReadString('View', 'ScriptExtraPaths', '');
+    ExpandedNodesStr := Self.Settings.ReadString('View', 'ScriptExpandedNodes', '');
+    Settings := Self.Settings;
+    RefByMode := Sender = mniRefByApplyScript;
+    OnApplyScript := HandleApplyScript;
+    SetColorScheme(Self.Settings.ReadString('UI', 'EditorColorScheme', cEditorSchemeAuto));
+    Show;
   end;
-  ApplyScript(ScriptName, Scr, Sender = mniRefByApplyScript);
+end;
+
+procedure TfrmMain.HandleApplyScript(const aScriptName, aScript: string;
+  const aExtraPaths, aExpandedNodes: string; aRefByMode: Boolean);
+begin
+  Settings.WriteString('View', 'LastUsedScript', aScriptName);
+  Settings.WriteString('View', 'ScriptExtraPaths', aExtraPaths);
+  Settings.WriteString('View', 'ScriptExpandedNodes', aExpandedNodes);
+  Settings.UpdateFile;
+  CreateActionsForScripts;
+  ApplyScript(aScriptName, aScript, aRefByMode);
 end;
 
 procedure TfrmMain.CreateActionsForScripts;
