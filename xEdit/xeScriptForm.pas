@@ -14,8 +14,8 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ExtCtrls, IOUtils, StrUtils, Vcl.ComCtrls, System.UITypes,
-  Generics.Collections,
+  Dialogs, StdCtrls, ExtCtrls, Menus, IOUtils, StrUtils, ShellAPI,
+  Vcl.ComCtrls, Vcl.FileCtrl, System.UITypes, Generics.Collections,
   SynEdit, SynMemo, SynEditKeyCmds, xeMainForm, SynHighlighterPas,
   VirtualTrees;
 
@@ -50,7 +50,9 @@ type
   TScriptNodeData = record
     Name: string;
     RelativePath: string;
+    BasePath: string;
     IsFolder: Boolean;
+    IsRoot: Boolean;
   end;
   PScriptNodeData = ^TScriptNodeData;
 
@@ -74,7 +76,6 @@ type
     vstScripts: TVirtualStringTree;
     splLeft: TSplitter;
     pnlBottom: TPanel;
-    btnNewScript: TButton;
     btnSave: TButton;
     btnOK: TButton;
     btnCancel: TButton;
@@ -82,6 +83,7 @@ type
     lblPosition: TLabel;
     dlgSave: TSaveDialog;
     procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -93,7 +95,6 @@ type
     procedure vstScriptsKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure vstScriptsDblClick(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
-    procedure btnNewScriptClick(Sender: TObject);
     procedure EditorKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure EditorMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure EditorKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -102,17 +103,38 @@ type
     Editor: TSynMemo;
     Highlighter: TSynPasSyn;
     FUpdatingTree: Boolean;
+    FCurrentBasePath: string;
     FCurrentRelPath: string;
     SaveOverride: string;
-    function EnsureFolderNode(const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
+    FExtraPaths: TStringList;
+    FExpandedNodes: TStringList;
+    pmuTree: TPopupMenu;
+    mniNewScript: TMenuItem;
+    mniAddFolder: TMenuItem;
+    mniRemoveFolder: TMenuItem;
+    function EnsureFolderNode(aRootNode: PVirtualNode; const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
     function FirstScriptNode: PVirtualNode;
+    function GetNodeBasePath(Node: PVirtualNode): string;
     function Indent(aText: string; aPrefix: string): string;
     function Dedent(aText: string; aPrefix: string): string;
     procedure DoScriptSelectionChange;
+    procedure pmuTreePopup(Sender: TObject);
+    procedure mniNewScriptClick(Sender: TObject);
+    procedure mniAddFolderClick(Sender: TObject);
+    procedure mniRemoveFolderClick(Sender: TObject);
+    procedure vstScriptsGetHint(Sender: TBaseVirtualTree; Node: PVirtualNode;
+      Column: TColumnIndex; var LineBreakStyle: TVTTooltipLineBreakStyle;
+      var HintText: string);
+    procedure WMDropFiles(var Msg: TWMDropFiles); message WM_DROPFILES;
+    function GetNodeKey(Node: PVirtualNode): string;
+    procedure SaveExpandedStates;
+    procedure RestoreExpandedStates;
   public
     Path: string;
     LastUsedScript: string;
     Script: string;
+    ExtraPathsStr: string;
+    ExpandedNodesStr: string;
     procedure UpdateCaretPos;
     procedure ReadScriptsList;
     procedure SetColorScheme(const AScheme: string);
@@ -128,8 +150,14 @@ implementation
 uses
   wbInterface;
 
-procedure TfrmScript.btnNewScriptClick(Sender: TObject);
+procedure TfrmScript.mniNewScriptClick(Sender: TObject);
+var
+  TargetRoot: string;
 begin
+  TargetRoot := GetNodeBasePath(vstScripts.GetNodeAt(vstScripts.ScreenToClient(pmuTree.PopupPoint)));
+  if TargetRoot = '' then
+    TargetRoot := Path;
+
   if Editor.Modified and (Editor.Text.Trim <> '') then
     if MessageDlg('The current script has been modified. Do you want to save it before creating a new script?',
                   mtConfirmation, mbYesNo, 0) = mrYes then
@@ -143,6 +171,7 @@ begin
     FUpdatingTree := False;
   end;
 
+  FCurrentBasePath := TargetRoot;
   FCurrentRelPath := '';
   SaveOverride := sNewScript;
   Editor.Lines.Clear;
@@ -159,37 +188,103 @@ begin
   UpdateCaretPos;
 end;
 
+procedure TfrmScript.mniAddFolderClick(Sender: TObject);
+var
+  Dir: string;
+begin
+  Dir := '';
+  if SelectDirectory('Select scripts folder', '', Dir) then begin
+    Dir := IncludeTrailingPathDelimiter(Dir);
+    if FExtraPaths.IndexOf(Dir) < 0 then begin
+      FExtraPaths.Add(Dir);
+      ReadScriptsList;
+    end;
+  end;
+end;
+
+procedure TfrmScript.mniRemoveFolderClick(Sender: TObject);
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+  idx: Integer;
+begin
+  Node := vstScripts.GetNodeAt(vstScripts.ScreenToClient(pmuTree.PopupPoint));
+  if not Assigned(Node) then Exit;
+  Data := vstScripts.GetNodeData(Node);
+  if not Data^.IsRoot then Exit;
+  idx := FExtraPaths.IndexOf(Data^.BasePath);
+  if idx < 0 then Exit;
+  FExtraPaths.Delete(idx);
+  ReadScriptsList;
+end;
+
+procedure TfrmScript.pmuTreePopup(Sender: TObject);
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+begin
+  Node := vstScripts.GetNodeAt(vstScripts.ScreenToClient(pmuTree.PopupPoint));
+  mniRemoveFolder.Visible := False;
+  if Assigned(Node) then begin
+    Data := vstScripts.GetNodeData(Node);
+    if Data^.IsRoot and not SameText(Data^.BasePath, Path) then
+      mniRemoveFolder.Visible := True;
+  end;
+end;
+
+function TfrmScript.GetNodeBasePath(Node: PVirtualNode): string;
+var
+  Data: PScriptNodeData;
+  N: PVirtualNode;
+begin
+  Result := '';
+  N := Node;
+  while Assigned(N) do begin
+    Data := vstScripts.GetNodeData(N);
+    if Data^.IsRoot then begin
+      Result := Data^.BasePath;
+      Exit;
+    end;
+    N := N.Parent;
+    if N = vstScripts.RootNode then
+      Break;
+  end;
+end;
+
 procedure TfrmScript.btnSaveClick(Sender: TObject);
 var
   Node: PVirtualNode;
   Data: PScriptNodeData;
-  s, s2: string;
+  BasePath, s, s2: string;
   WasNewScript: Boolean;
 begin
   WasNewScript := False;
   s := SaveOverride;
+  BasePath := FCurrentBasePath;
+  if BasePath = '' then
+    BasePath := Path;
+
   if s = '' then begin
     Node := vstScripts.FocusedNode;
     if not Assigned(Node) then Exit;
     Data := vstScripts.GetNodeData(Node);
-    if Data^.IsFolder or (Data^.RelativePath = '') then Exit;
+    if Data^.IsFolder or Data^.IsRoot or (Data^.RelativePath = '') then Exit;
     s := Data^.RelativePath;
+    BasePath := Data^.BasePath;
   end;
 
   if s = sNewScript then begin
     WasNewScript := True;
-    dlgSave.InitialDir := Path;
+    dlgSave.InitialDir := BasePath;
     if dlgSave.Execute then begin
       s2 := dlgSave.FileName;
-      if s2.StartsWith(Path, True) then
-        s2 := ChangeFileExt(Copy(s2, Length(Path) + 1, MaxInt), '')
-      else
-        s2 := ChangeFileExt(ExtractFileName(s2), '');
-      s := Path + s2 + sScriptExt;
+      BasePath := IncludeTrailingPathDelimiter(ExtractFilePath(s2));
+      s2 := ChangeFileExt(ExtractFileName(s2), '');
+      s := BasePath + s2 + sScriptExt;
     end else
       Exit;
   end else
-    s := Path + s + sScriptExt;
+    s := BasePath + s + sScriptExt;
 
   with TStringList.Create do try
     Text := Editor.Lines.Text.Replace(#9, #32#32);
@@ -202,6 +297,7 @@ begin
   end;
 
   if WasNewScript then begin
+    FCurrentBasePath := BasePath;
     FCurrentRelPath := s2;
     SaveOverride := '';
     ReadScriptsList;
@@ -212,15 +308,16 @@ procedure TfrmScript.DoScriptSelectionChange;
 var
   Node: PVirtualNode;
   Data: PScriptNodeData;
-  NewRelPath, OldRelPath: string;
+  NewRelPath, NewBasePath, OldRelPath: string;
 begin
   Node := vstScripts.FocusedNode;
   if not Assigned(Node) then Exit;
   Data := vstScripts.GetNodeData(Node);
-  if Data^.IsFolder then Exit;
+  if Data^.IsFolder or Data^.IsRoot then Exit;
 
   NewRelPath := Data^.RelativePath;
-  if SameText(NewRelPath, FCurrentRelPath) then Exit;
+  NewBasePath := Data^.BasePath;
+  if SameText(NewRelPath, FCurrentRelPath) and SameText(NewBasePath, FCurrentBasePath) then Exit;
 
   if Editor.Modified and (Editor.Text.Trim <> '') then begin
     OldRelPath := FCurrentRelPath;
@@ -231,12 +328,13 @@ begin
       Exit;
   end;
 
+  FCurrentBasePath := NewBasePath;
   FCurrentRelPath := NewRelPath;
   SaveOverride := '';
   Editor.Lines.Clear;
   with TStringList.Create do try
     try
-      LoadFromFile(Path + NewRelPath + sScriptExt);
+      LoadFromFile(NewBasePath + NewRelPath + sScriptExt);
     except end;
     Editor.Lines.Text := Text.Replace(#9, #32#32);
     Editor.Modified := False;
@@ -343,7 +441,7 @@ begin
   UpdateCaretPos;
 end;
 
-function TfrmScript.EnsureFolderNode(const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
+function TfrmScript.EnsureFolderNode(aRootNode: PVirtualNode; const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
 var
   ParentPath: string;
   ParentNode: PVirtualNode;
@@ -353,9 +451,9 @@ begin
 
   ParentPath := ExtractFileDir(FolderPath);
   if ParentPath = '' then
-    ParentNode := nil
+    ParentNode := aRootNode
   else
-    ParentNode := EnsureFolderNode(ParentPath, FolderNodes);
+    ParentNode := EnsureFolderNode(aRootNode, ParentPath, FolderNodes);
 
   Result := vstScripts.AddChild(ParentNode);
   Data := vstScripts.GetNodeData(Result);
@@ -374,7 +472,7 @@ begin
   Node := vstScripts.GetFirst;
   while Assigned(Node) do begin
     Data := vstScripts.GetNodeData(Node);
-    if not Data^.IsFolder then begin
+    if not Data^.IsFolder and not Data^.IsRoot then begin
       Result := Node;
       Exit;
     end;
@@ -385,65 +483,109 @@ end;
 procedure TfrmScript.ReadScriptsList;
 var
   FolderNodes: TDictionary<string, PVirtualNode>;
+  AllPaths: TStringList;
   Files: TArray<string>;
-  f, sname, dirpart, leafname: string;
-  ScriptNode, SelectNode: PVirtualNode;
+  f, sname, dirpart, leafname, BasePath: string;
+  ScriptNode, SelectNode, RootNode: PVirtualNode;
   Data: PScriptNodeData;
-  FilterText, TargetRelPath: string;
+  FilterText, TargetFullPath: string;
+  i: Integer;
+  HasChildren: Boolean;
 begin
   Path := IncludeTrailingPathDelimiter(Path);
 
-  TargetRelPath := '';
+  TargetFullPath := '';
   SelectNode := vstScripts.FocusedNode;
   if Assigned(SelectNode) then begin
     Data := vstScripts.GetNodeData(SelectNode);
-    if not Data^.IsFolder then
-      TargetRelPath := Data^.RelativePath;
+    if not Data^.IsFolder and not Data^.IsRoot then
+      TargetFullPath := Data^.BasePath + Data^.RelativePath;
   end;
-  if TargetRelPath = '' then
-    TargetRelPath := LastUsedScript;
+  if TargetFullPath = '' then
+    TargetFullPath := LastUsedScript;
+
+  SaveExpandedStates;
 
   FUpdatingTree := True;
   vstScripts.BeginUpdate;
   vstScripts.Clear;
-  FolderNodes := TDictionary<string, PVirtualNode>.Create;
   try
-    FilterText := edFilter.Text;
-    FilterText := FilterText.Trim.ToLower;
-    if TDirectory.Exists(Path) then begin
-      Files := TDirectory.GetFiles(Path, '*' + sScriptExt, TSearchOption.soAllDirectories);
-      TArray.Sort<string>(Files);
-      for f in Files do begin
-        sname := ChangeFileExt(Copy(f, Length(Path) + 1, MaxInt), '');
-        if SameText(sNewScriptName, sname) then Continue;
-        if (FilterText <> '') and not sname.ToLower.Contains(FilterText) then Continue;
+    FilterText := Trim(LowerCase(edFilter.Text));
 
-        dirpart := ExtractFileDir(sname);
-        leafname := ExtractFileName(sname);
+    AllPaths := TStringList.Create;
+    try
+      AllPaths.Add(Path);
+      for i := 0 to Pred(FExtraPaths.Count) do
+        if AllPaths.IndexOf(FExtraPaths[i]) < 0 then
+          AllPaths.Add(FExtraPaths[i]);
 
-        if dirpart <> '' then
-          ScriptNode := vstScripts.AddChild(EnsureFolderNode(dirpart, FolderNodes))
-        else
-          ScriptNode := vstScripts.AddChild(nil);
+      for i := 0 to Pred(AllPaths.Count) do begin
+        BasePath := IncludeTrailingPathDelimiter(AllPaths[i]);
+        if not TDirectory.Exists(BasePath) then Continue;
 
-        Data := vstScripts.GetNodeData(ScriptNode);
-        Data^.Name := leafname;
-        Data^.RelativePath := sname;
+        RootNode := vstScripts.AddChild(nil);
+        Data := vstScripts.GetNodeData(RootNode);
+        Data^.Name := ExtractFileName(ExcludeTrailingPathDelimiter(BasePath));
+        Data^.BasePath := BasePath;
         Data^.IsFolder := False;
+        Data^.IsRoot := True;
+
+        FolderNodes := TDictionary<string, PVirtualNode>.Create;
+        try
+          Files := TDirectory.GetFiles(BasePath, '*' + sScriptExt, TSearchOption.soAllDirectories);
+          TArray.Sort<string>(Files);
+          for f in Files do begin
+            sname := ChangeFileExt(Copy(f, Length(BasePath) + 1, MaxInt), '');
+            if SameText(sNewScriptName, sname) then Continue;
+            if (FilterText <> '') and not sname.ToLower.Contains(FilterText) then Continue;
+
+            dirpart := ExtractFileDir(sname);
+            leafname := ExtractFileName(sname);
+
+            if dirpart <> '' then
+              ScriptNode := vstScripts.AddChild(EnsureFolderNode(RootNode, dirpart, FolderNodes))
+            else
+              ScriptNode := vstScripts.AddChild(RootNode);
+
+            Data := vstScripts.GetNodeData(ScriptNode);
+            Data^.Name := leafname;
+            Data^.RelativePath := sname;
+            Data^.BasePath := BasePath;
+            Data^.IsFolder := False;
+            Data^.IsRoot := False;
+          end;
+        finally
+          FolderNodes.Free;
+        end;
+
       end;
+    finally
+      AllPaths.Free;
     end;
-    vstScripts.FullExpand;
+
+    // Bottom-up prune: remove folder/root nodes with no children
+    var PruneNode := vstScripts.GetLast;
+    while Assigned(PruneNode) do begin
+      var PrevNode := vstScripts.GetPrevious(PruneNode);
+      Data := vstScripts.GetNodeData(PruneNode);
+      if (Data^.IsFolder or Data^.IsRoot) and
+         not Assigned(vstScripts.GetFirstChild(PruneNode)) then
+        vstScripts.DeleteNode(PruneNode);
+      PruneNode := PrevNode;
+    end;
+
+    RestoreExpandedStates;
   finally
-    FolderNodes.Free;
     vstScripts.EndUpdate;
   end;
 
   SelectNode := nil;
-  if TargetRelPath <> '' then begin
+  if TargetFullPath <> '' then begin
     var Node := vstScripts.GetFirst;
     while Assigned(Node) do begin
       Data := vstScripts.GetNodeData(Node);
-      if not Data^.IsFolder and SameText(Data^.RelativePath, TargetRelPath) then begin
+      if not Data^.IsFolder and not Data^.IsRoot and
+         SameText(Data^.BasePath + Data^.RelativePath, TargetFullPath) then begin
         SelectNode := Node;
         Break;
       end;
@@ -453,10 +595,19 @@ begin
   if not Assigned(SelectNode) then
     SelectNode := FirstScriptNode;
 
+  // Ensure ancestors of selected node are expanded so it's visible
+  if Assigned(SelectNode) then begin
+    var AncestorNode := SelectNode.Parent;
+    while Assigned(AncestorNode) and (AncestorNode <> vstScripts.RootNode) do begin
+      vstScripts.Expanded[AncestorNode] := True;
+      AncestorNode := AncestorNode.Parent;
+    end;
+  end;
+
   vstScripts.FocusedNode := SelectNode;
   if Assigned(SelectNode) then begin
     vstScripts.Selected[SelectNode] := True;
-    vstScripts.ScrollIntoView(SelectNode, False);
+    vstScripts.TopNode := SelectNode;
   end;
 
   FUpdatingTree := False;
@@ -469,6 +620,10 @@ var
   Node: PVirtualNode;
   Data: PScriptNodeData;
 begin
+  ExtraPathsStr := String.Join(';', FExtraPaths.ToStringArray);
+  SaveExpandedStates;
+  ExpandedNodesStr := String.Join('|', FExpandedNodes.ToStringArray);
+
   if ModalResult = mrOk then begin
     if Editor.Modified then
       if MessageDlg('The script has been modified. Do you want to save it?', mtConfirmation, mbYesNo, 0) = mrYes then
@@ -477,8 +632,8 @@ begin
     Node := vstScripts.FocusedNode;
     if Assigned(Node) then begin
       Data := vstScripts.GetNodeData(Node);
-      if not Data^.IsFolder then
-        LastUsedScript := Data^.RelativePath;
+      if not Data^.IsFolder and not Data^.IsRoot then
+        LastUsedScript := Data^.BasePath + Data^.RelativePath;
     end;
   end;
 end;
@@ -578,8 +733,42 @@ begin
 end;
 
 procedure TfrmScript.FormCreate(Sender: TObject);
+var
+  Sep: TMenuItem;
 begin
   vstScripts.NodeDataSize := SizeOf(TScriptNodeData);
+
+  FExtraPaths := TStringList.Create;
+  FExpandedNodes := TStringList.Create;
+  FExpandedNodes.Sorted := True;
+
+  pmuTree := TPopupMenu.Create(Self);
+  pmuTree.OnPopup := pmuTreePopup;
+
+  mniNewScript := TMenuItem.Create(pmuTree);
+  mniNewScript.Caption := 'New Script...';
+  mniNewScript.OnClick := mniNewScriptClick;
+  pmuTree.Items.Add(mniNewScript);
+
+  Sep := TMenuItem.Create(pmuTree);
+  Sep.Caption := '-';
+  pmuTree.Items.Add(Sep);
+
+  mniAddFolder := TMenuItem.Create(pmuTree);
+  mniAddFolder.Caption := 'Add Folder...';
+  mniAddFolder.OnClick := mniAddFolderClick;
+  pmuTree.Items.Add(mniAddFolder);
+
+  mniRemoveFolder := TMenuItem.Create(pmuTree);
+  mniRemoveFolder.Caption := 'Remove Folder';
+  mniRemoveFolder.OnClick := mniRemoveFolderClick;
+  pmuTree.Items.Add(mniRemoveFolder);
+
+  vstScripts.PopupMenu := pmuTree;
+  DragAcceptFiles(Self.Handle, True);
+  vstScripts.HintMode := hmHint;
+  vstScripts.ShowHint := True;
+  vstScripts.OnGetHint := vstScriptsGetHint;
 
   Editor := TSynMemo.Create(Self);
   Editor.Parent := Self;
@@ -608,6 +797,12 @@ begin
   Editor.Gutter.Visible := True;
 end;
 
+procedure TfrmScript.FormDestroy(Sender: TObject);
+begin
+  FreeAndNil(FExpandedNodes);
+  FreeAndNil(FExtraPaths);
+end;
+
 procedure TfrmScript.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 begin
   if Key = VK_ESCAPE then
@@ -619,7 +814,24 @@ begin
 end;
 
 procedure TfrmScript.FormShow(Sender: TObject);
+var
+  Parts: TArray<string>;
+  s: string;
 begin
+  FExtraPaths.Clear;
+  if ExtraPathsStr <> '' then begin
+    Parts := ExtraPathsStr.Split([';']);
+    for s in Parts do
+      if s.Trim <> '' then
+        FExtraPaths.Add(IncludeTrailingPathDelimiter(s.Trim));
+  end;
+  FExpandedNodes.Clear;
+  if ExpandedNodesStr <> '' then begin
+    Parts := ExpandedNodesStr.Split(['|']);
+    for s in Parts do
+      if s <> '' then
+        FExpandedNodes.Add(s);
+  end;
   ReadScriptsList;
 end;
 
@@ -631,7 +843,7 @@ begin
   Node := vstScripts.FocusedNode;
   if Assigned(Node) then begin
     Data := vstScripts.GetNodeData(Node);
-    if not Data^.IsFolder then
+    if not Data^.IsFolder and not Data^.IsRoot then
       Editor.SetFocus;
   end;
 end;
@@ -659,6 +871,105 @@ begin
   if TextType <> ttNormal then Exit;
   Data := Sender.GetNodeData(Node);
   CellText := Data^.Name;
+end;
+
+procedure TfrmScript.vstScriptsGetHint(Sender: TBaseVirtualTree;
+  Node: PVirtualNode; Column: TColumnIndex;
+  var LineBreakStyle: TVTTooltipLineBreakStyle; var HintText: string);
+var
+  Data: PScriptNodeData;
+begin
+  Data := Sender.GetNodeData(Node);
+  if Data^.IsRoot then
+    HintText := ExcludeTrailingPathDelimiter(Data^.BasePath)
+  else if not Data^.IsFolder and (Data^.RelativePath <> '') then
+    HintText := Data^.BasePath + Data^.RelativePath + sScriptExt
+  else
+    HintText := '';
+end;
+
+function TfrmScript.GetNodeKey(Node: PVirtualNode): string;
+var
+  Data: PScriptNodeData;
+  N: PVirtualNode;
+  Parts: string;
+begin
+  Data := vstScripts.GetNodeData(Node);
+  if Data^.IsRoot then begin
+    Result := Data^.BasePath;
+    Exit;
+  end;
+  // Build path from folder names up to root
+  Parts := Data^.Name;
+  N := Node.Parent;
+  while Assigned(N) and (N <> vstScripts.RootNode) do begin
+    Data := vstScripts.GetNodeData(N);
+    if Data^.IsRoot then begin
+      Result := Data^.BasePath + '::' + Parts;
+      Exit;
+    end;
+    Parts := Data^.Name + '\' + Parts;
+    N := N.Parent;
+  end;
+  Result := Parts;
+end;
+
+procedure TfrmScript.SaveExpandedStates;
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+begin
+  FExpandedNodes.Clear;
+  Node := vstScripts.GetFirst;
+  while Assigned(Node) do begin
+    Data := vstScripts.GetNodeData(Node);
+    if (Data^.IsRoot or Data^.IsFolder) and vstScripts.Expanded[Node] then
+      FExpandedNodes.Add(GetNodeKey(Node));
+    Node := vstScripts.GetNext(Node);
+  end;
+end;
+
+procedure TfrmScript.RestoreExpandedStates;
+var
+  Node: PVirtualNode;
+  Data: PScriptNodeData;
+begin
+  Node := vstScripts.GetFirst;
+  while Assigned(Node) do begin
+    Data := vstScripts.GetNodeData(Node);
+    if (Data^.IsRoot or Data^.IsFolder) and
+       (FExpandedNodes.IndexOf(GetNodeKey(Node)) >= 0) then
+      vstScripts.Expanded[Node] := True;
+    Node := vstScripts.GetNext(Node);
+  end;
+end;
+
+procedure TfrmScript.WMDropFiles(var Msg: TWMDropFiles);
+var
+  i, Count: Integer;
+  Buf: array[0..MAX_PATH] of Char;
+  Dir: string;
+  Changed: Boolean;
+begin
+  Changed := False;
+  Count := DragQueryFile(Msg.Drop, $FFFFFFFF, nil, 0);
+  try
+    for i := 0 to Pred(Count) do begin
+      DragQueryFile(Msg.Drop, i, Buf, MAX_PATH);
+      Dir := Buf;
+      if not TDirectory.Exists(Dir) then Continue;
+      Dir := IncludeTrailingPathDelimiter(Dir);
+      if SameText(Dir, Path) then Continue;
+      if FExtraPaths.IndexOf(Dir) >= 0 then Continue;
+      FExtraPaths.Add(Dir);
+      Changed := True;
+    end;
+  finally
+    DragFinish(Msg.Drop);
+  end;
+  if Changed then
+    ReadScriptsList;
+  Msg.Result := 0;
 end;
 
 procedure TfrmScript.vstScriptsKeyDown(Sender: TObject; var Key: Word;

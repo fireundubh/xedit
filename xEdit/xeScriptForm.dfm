@@ -15,9 +15,18 @@ object frmScript: TfrmScript
   Position = poMainFormCenter
   OnClose = FormClose
   OnCreate = FormCreate
+  OnDestroy = FormDestroy
   OnKeyDown = FormKeyDown
   OnShow = FormShow
   TextHeight = 13
+  object splLeft: TSplitter
+    Left = 220
+    Top = 0
+    Width = 5
+    Height = 544
+    Cursor = crVSplit
+    ResizeStyle = rsUpdate
+  end
   object pnlBottom: TPanel
     Left = 0
     Top = 565
@@ -29,22 +38,13 @@ object frmScript: TfrmScript
     DesignSize = (
       900
       35)
-    object btnNewScript: TButton
-      Left = 8
-      Top = 6
-      Width = 90
-      Height = 25
-      Caption = '&New Script'
-      TabOrder = 0
-      OnClick = btnNewScriptClick
-    end
     object btnSave: TButton
-      Left = 104
+      Left = 8
       Top = 6
       Width = 75
       Height = 25
       Caption = '&Save'
-      TabOrder = 1
+      TabOrder = 0
       OnClick = btnSaveClick
     end
     object btnOK: TButton
@@ -55,7 +55,7 @@ object frmScript: TfrmScript
       Anchors = [akTop, akRight]
       Caption = 'OK'
       ModalResult = 1
-      TabOrder = 2
+      TabOrder = 1
     end
     object btnCancel: TButton
       Left = 819
@@ -65,7 +65,7 @@ object frmScript: TfrmScript
       Anchors = [akTop, akRight]
       Caption = 'Cancel'
       ModalResult = 2
-      TabOrder = 3
+      TabOrder = 2
     end
   end
   object pnlStatus: TPanel
@@ -110,26 +110,18 @@ object frmScript: TfrmScript
       Height = 523
       Align = alClient
       Header.AutoSizeIndex = 0
+      Header.MainColumn = -1
       Header.Options = []
       TabOrder = 1
       TreeOptions.MiscOptions = [toFullRepaintOnResize, toInitOnSave, toToggleOnDblClick, toWheelPanning]
-      TreeOptions.PaintOptions = [toShowButtons, toShowDropmark, toShowRoot, toShowTreeLines, toThemeAware, toUseBlendedImages]
       TreeOptions.SelectionOptions = [toFullRowSelect]
       OnDblClick = vstScriptsDblClick
       OnFocusChanged = vstScriptsFocusChanged
       OnFreeNode = vstScriptsFreeNode
       OnGetText = vstScriptsGetText
       OnKeyDown = vstScriptsKeyDown
+      Columns = <>
     end
-  end
-  object splLeft: TSplitter
-    Left = 220
-    Top = 0
-    Width = 5
-    Height = 544
-    Align = alLeft
-    Cursor = crVSplit
-    ResizeStyle = rsUpdate
   end
   object dlgSave: TSaveDialog
     DefaultExt = 'pas'

@@ -8724,12 +8724,20 @@ begin
   with TfrmScript.Create(Self) do try
     Path := wbScriptsPath;
     LastUsedScript := Settings.ReadString('View', 'LastUsedScript', '');
+    ExtraPathsStr := Settings.ReadString('View', 'ScriptExtraPaths', '');
+    ExpandedNodesStr := Settings.ReadString('View', 'ScriptExpandedNodes', '');
     SetColorScheme(Settings.ReadString('UI', 'EditorColorScheme', cEditorSchemeAuto));
-    if ShowModal <> mrOK then
+    if ShowModal <> mrOK then begin
+      Settings.WriteString('View', 'ScriptExtraPaths', ExtraPathsStr);
+      Settings.WriteString('View', 'ScriptExpandedNodes', ExpandedNodesStr);
+      Settings.UpdateFile;
       Exit;
+    end;
     Scr := Script;
     ScriptName := LastUsedScript;
     Settings.WriteString('View', 'LastUsedScript', LastUsedScript);
+    Settings.WriteString('View', 'ScriptExtraPaths', ExtraPathsStr);
+    Settings.WriteString('View', 'ScriptExpandedNodes', ExpandedNodesStr);
     Settings.UpdateFile;
     CreateActionsForScripts;
   finally
