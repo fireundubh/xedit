@@ -17,7 +17,7 @@ uses
   Dialogs, StdCtrls, ExtCtrls, Menus, IOUtils, StrUtils, ShellAPI, IniFiles,
   Vcl.ComCtrls, Vcl.FileCtrl, System.UITypes, Generics.Collections,
   SynEdit, SynMemo, SynEditKeyCmds, SynEditTypes, xeMainForm,
-  SynHighlighterPas, VirtualTrees, Buttons;
+  SynHighlighterPas, VirtualTrees, Buttons, wbInterface;
 
 const
   sNewScript = '<new script>';
@@ -116,6 +116,10 @@ type
     pnlToolbar: TPanel;
     btnToolSave: TSpeedButton;
     btnToolReset: TSpeedButton;
+    btnToolInsertRef: TSpeedButton;
+    pmuInsertRef: TPopupMenu;
+    pmuEditor: TPopupMenu;
+    mniEditorInsertRef: TMenuItem;
     pnlStatusBar: TPanel;
     lblCaret: TLabel;
     lblModified: TLabel;
@@ -144,6 +148,11 @@ type
     procedure RestoreExpandedStates;
     procedure SaveSettings;
     procedure DoApplyAndClose;
+    procedure btnToolInsertRefClick(Sender: TObject);
+    procedure pmuInsertRefTemplateClick(Sender: TObject);
+    function BuildRefCode: string;
+    function BuildNavRefCode(aElement: IwbElement): string;
+    function BuildViewRefCode(aElement: IwbElement): string;
   public
     Path: string;
     LastUsedScript: string;
@@ -164,8 +173,6 @@ implementation
 
 {$R *.dfm}
 
-uses
-  wbInterface;
 
 procedure TfrmScript.mniNewScriptClick(Sender: TObject);
 var
@@ -885,6 +892,20 @@ begin
   btnToolReset.Enabled := False;
   btnToolReset.OnClick := btnToolResetClick;
 
+  btnToolInsertRef := TSpeedButton.Create(Self);
+  btnToolInsertRef.Parent := pnlToolbar;
+  btnToolInsertRef.Left := 64;
+  btnToolInsertRef.Top := 1;
+  btnToolInsertRef.Width := 26;
+  btnToolInsertRef.Height := 24;
+  btnToolInsertRef.Caption := #$1F4CB;
+  btnToolInsertRef.Flat := True;
+  btnToolInsertRef.ShowHint := True;
+  btnToolInsertRef.Hint := 'Insert Reference (Ctrl+I)';
+  btnToolInsertRef.OnClick := btnToolInsertRefClick;
+
+  pmuInsertRef := TPopupMenu.Create(Self);
+
   pnlStatusBar := TPanel.Create(Self);
   pnlStatusBar.Parent := pnlEditor;
   pnlStatusBar.Align := alBottom;
@@ -939,6 +960,14 @@ begin
   Editor.Gutter.AutoSize := True;
   Editor.Gutter.Visible := False;
   Editor.Gutter.Visible := True;
+
+  pmuEditor := TPopupMenu.Create(Self);
+  mniEditorInsertRef := TMenuItem.Create(pmuEditor);
+  mniEditorInsertRef.Caption := 'Insert Reference';
+  mniEditorInsertRef.ShortCut := ShortCut(Ord('I'), [ssCtrl]);
+  mniEditorInsertRef.OnClick := btnToolInsertRefClick;
+  pmuEditor.Items.Add(mniEditorInsertRef);
+  Editor.PopupMenu := pmuEditor;
 end;
 
 procedure TfrmScript.FormDestroy(Sender: TObject);
@@ -952,6 +981,9 @@ begin
   if (Key = Ord('S')) and (Shift = [ssCtrl]) then begin
     Key := 0;
     if Editor.Modified then btnSaveClick(Self);
+  end else if (Key = Ord('I')) and (Shift = [ssCtrl]) then begin
+    Key := 0;
+    btnToolInsertRefClick(Self);
   end else if Key = VK_ESCAPE then
     if edFilter.Focused then begin
       edFilter.Text := '';
@@ -1126,6 +1158,158 @@ begin
     Key := 0;
     Editor.SetFocus;
   end;
+end;
+
+function TfrmScript.BuildRefCode: string;
+var
+  Element: IwbElement;
+begin
+  Result := '';
+  Element := frmMain.GetFocusedViewElementSafely;
+  if Assigned(Element) and
+     not Supports(Element, IwbFile) and
+     not Supports(Element, IwbMainRecord) and
+     not Supports(Element, IwbGroupRecord) then begin
+    Result := BuildViewRefCode(Element);
+    if Result <> '' then
+      Exit;
+  end;
+  Element := frmMain.GetFocusedNavElementSafely;
+  if Assigned(Element) then
+    Result := BuildNavRefCode(Element);
+end;
+
+function TfrmScript.BuildNavRefCode(aElement: IwbElement): string;
+var
+  FileElem: IwbFile;
+  MainRec: IwbMainRecord;
+  GroupRec: IwbGroupRecord;
+  FormIDStr, EdID, FileName, ElemPath, OwnerPath, RelPath: string;
+begin
+  Result := '';
+  if Supports(aElement, IwbFile, FileElem) then
+    Result := 'FileByName(''' + FileElem.FileName + ''')'
+  else if Supports(aElement, IwbMainRecord, MainRec) then begin
+    FormIDStr := '$' + MainRec.LoadOrderFormID.ToString;
+    FileName := MainRec._File.FileName;
+    EdID := MainRec.EditorID;
+    Result := 'RecordByFormID(FileByName(''' + FileName + '''), ' + FormIDStr + ', True)';
+    if EdID <> '' then
+      Result := Result + ' // ' + EdID;
+  end
+  else if Supports(aElement, IwbGroupRecord, GroupRec) then begin
+    if GroupRec.GroupType = 0 then begin
+      FileName := aElement._File.FileName;
+      Result := 'f := FileByName(''' + FileName + ''');' + sLineBreak +
+                'g := GroupBySignature(f, ''' + GroupRec.GroupLabelSignature + ''');' + sLineBreak +
+                'for i := 0 to Pred(ElementCount(g)) do begin' + sLineBreak +
+                '  r := ElementByIndex(g, i);' + sLineBreak +
+                '  // ...' + sLineBreak +
+                'end;';
+    end else begin
+      MainRec := aElement.ContainingMainRecord;
+      if Assigned(MainRec) then begin
+        ElemPath := aElement.Path;
+        OwnerPath := MainRec.Path;
+        if (Length(ElemPath) > Length(OwnerPath)) and
+           SameText(Copy(ElemPath, 1, Length(OwnerPath)), OwnerPath) then begin
+          RelPath := Copy(ElemPath, Length(OwnerPath) + 1, MaxInt);
+          if Copy(RelPath, 1, 3) = ' \ ' then
+            Delete(RelPath, 1, 3)
+          else if (RelPath <> '') and (RelPath[1] = '\') then
+            Delete(RelPath, 1, 1);
+          RelPath := StringReplace(RelPath, ' \ ', '\', [rfReplaceAll]);
+          if RelPath <> '' then
+            Result := 'ElementByPath(r, ''' + RelPath + ''')';
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TfrmScript.BuildViewRefCode(aElement: IwbElement): string;
+var
+  Templates: TwbTemplateElements;
+  MainRec: IwbMainRecord;
+  ElemPath, MainRecPath, RelPath: string;
+begin
+  Result := '';
+  Templates := aElement.GetAssignTemplates(High(Integer));
+  if Length(Templates) > 0 then begin
+    if Length(Templates) = 1 then
+      Result := 'TemplateAssign(container, ''' + Templates[0].Name + ''')'
+    else
+      Result := #1;
+    Exit;
+  end;
+  MainRec := aElement.ContainingMainRecord;
+  if not Assigned(MainRec) then
+    Exit;
+  ElemPath := aElement.Path;
+  MainRecPath := MainRec.Path;
+  if (Length(ElemPath) > Length(MainRecPath)) and
+     SameText(Copy(ElemPath, 1, Length(MainRecPath)), MainRecPath) then begin
+    RelPath := Copy(ElemPath, Length(MainRecPath) + 1, MaxInt);
+    if Copy(RelPath, 1, 3) = ' \ ' then
+      Delete(RelPath, 1, 3)
+    else if (RelPath <> '') and (RelPath[1] = '\') then
+      Delete(RelPath, 1, 1);
+    RelPath := StringReplace(RelPath, ' \ ', '\', [rfReplaceAll]);
+    if RelPath <> '' then
+      Result := 'ElementByPath(r, ''' + RelPath + ''')';
+  end;
+end;
+
+procedure TfrmScript.btnToolInsertRefClick(Sender: TObject);
+var
+  Code: string;
+  Element: IwbElement;
+  Templates: TwbTemplateElements;
+  i: Integer;
+  Item: TMenuItem;
+  Pt: TPoint;
+begin
+  Code := BuildRefCode;
+  if Code = '' then begin
+    MessageDlg('No element selected in the main window.', mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  if Code = #1 then begin
+    Element := frmMain.GetFocusedViewElementSafely;
+    if not Assigned(Element) then Exit;
+    Templates := Element.GetAssignTemplates(High(Integer));
+    if Length(Templates) = 0 then Exit;
+    pmuInsertRef.Items.Clear;
+    for i := 0 to High(Templates) do begin
+      Item := TMenuItem.Create(pmuInsertRef);
+      Item.Caption := Templates[i].Name;
+      Item.Tag := i;
+      Item.OnClick := pmuInsertRefTemplateClick;
+      pmuInsertRef.Items.Add(Item);
+    end;
+    Pt.X := 0;
+    Pt.Y := btnToolInsertRef.Height;
+    Pt := btnToolInsertRef.ClientToScreen(Pt);
+    pmuInsertRef.Popup(Pt.X, Pt.Y);
+    Exit;
+  end;
+  Editor.SelText := Code;
+  Editor.SetFocus;
+end;
+
+procedure TfrmScript.pmuInsertRefTemplateClick(Sender: TObject);
+var
+  Element: IwbElement;
+  Templates: TwbTemplateElements;
+  Idx: Integer;
+begin
+  Element := frmMain.GetFocusedViewElementSafely;
+  if not Assigned(Element) then Exit;
+  Templates := Element.GetAssignTemplates(High(Integer));
+  Idx := TMenuItem(Sender).Tag;
+  if (Idx < 0) or (Idx >= Length(Templates)) then Exit;
+  Editor.SelText := 'TemplateAssign(container, ''' + Templates[Idx].Name + ''')';
+  Editor.SetFocus;
 end;
 
 end.
