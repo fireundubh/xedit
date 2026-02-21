@@ -25,6 +25,8 @@ type
     function FunctionExists(const aName: string): Boolean;
     function CallFunction(const aName: string; const aParams: array of Variant): Variant;
     function GetLastErrorLocation: string;
+    function GetLastErrorLine: Integer;
+    function GetLastErrorUnitName: string;
   end;
 
   TxeScriptHost = class(TObject)

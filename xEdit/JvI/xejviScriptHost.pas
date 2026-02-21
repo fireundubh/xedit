@@ -51,6 +51,8 @@ type
     function CallFunction(const aName: string; const aParams: array of Variant): Variant;
     function FunctionExists(const aName: string): Boolean;
     function GetLastErrorLocation: string;
+    function GetLastErrorLine: Integer;
+    function GetLastErrorUnitName: string;
   public
     destructor Destroy; override;
   end;
@@ -841,6 +843,24 @@ begin
   var LastError := FProgram.LastError;
   if Assigned(LastError) then
     Result := 'unit ' + LastError.ErrUnitName + ' line ' + IntToStr(LastError.ErrLine)
+  else
+    Result := '';
+end;
+
+function TxejviScript.GetLastErrorLine: Integer;
+begin
+  var LastError := FProgram.LastError;
+  if Assigned(LastError) then
+    Result := LastError.ErrLine
+  else
+    Result := -1;
+end;
+
+function TxejviScript.GetLastErrorUnitName: string;
+begin
+  var LastError := FProgram.LastError;
+  if Assigned(LastError) then
+    Result := LastError.ErrUnitName
   else
     Result := '';
 end;

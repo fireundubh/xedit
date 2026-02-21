@@ -1017,6 +1017,9 @@ type
   public
     ScriptProcessElements: TwbElementTypes;
     MonospaceFontName: string;
+    ScriptLastErrorLine: Integer;
+    ScriptLastErrorUnitName: string;
+    ScriptLastErrorMessage: string;
   private
     ScriptHotkeys: TStringList;
 
@@ -8437,6 +8440,10 @@ begin
   Count := 0;
   ScriptProcessElements := [etMainRecord];
 
+  ScriptLastErrorLine := -1;
+  ScriptLastErrorUnitName := '';
+  ScriptLastErrorMessage := '';
+
   Script := TxeScriptHost.CreateScript(aScriptName, aScript);
   try
     ScriptRunning := True;
@@ -8506,6 +8513,9 @@ begin
               if LastErrorLocation <> '' then
                 LastErrorLocation := ' in ' + LastErrorLocation;
               wbProgress('Exception' + LastErrorLocation + ': [' + E.ClassName + '] ' + E.Message, True);
+              ScriptLastErrorLine := Script.GetLastErrorLine;
+              ScriptLastErrorUnitName := Script.GetLastErrorUnitName;
+              ScriptLastErrorMessage := E.ClassName + ': ' + E.Message;
               //raise; crashes, with Access Violation in delphi exception handling code even though it shouldn't...
               Abort;
             end;
@@ -8735,6 +8745,9 @@ begin
     Settings := Self.Settings;
     RefByMode := Sender = mniRefByApplyScript;
     OnApplyScript := HandleApplyScript;
+    ErrorLine := Self.ScriptLastErrorLine;
+    ErrorUnitName := Self.ScriptLastErrorUnitName;
+    ErrorMessage := Self.ScriptLastErrorMessage;
     SetColorScheme(Self.Settings.ReadString('UI', 'EditorColorScheme', cEditorSchemeAuto));
     Show;
   end;

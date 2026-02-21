@@ -155,6 +155,7 @@ type
     procedure BuildViewRefPopup(aElement: IwbElement; const aPopupPos: TPoint; const aNavCode: string);
     function GetSignatureStr(aElement: IwbElement): string;
     function GetRelativePath(aElement: IwbElement; aMainRec: IwbMainRecord): string;
+    procedure GoToErrorLine;
   public
     Path: string;
     LastUsedScript: string;
@@ -163,6 +164,9 @@ type
     ExpandedNodesStr: string;
     RefByMode: Boolean;
     Settings: TMemIniFile;
+    ErrorLine: Integer;
+    ErrorUnitName: string;
+    ErrorMessage: string;
     OnApplyScript: TApplyScriptEvent;
     procedure ReadScriptsList;
     procedure SetColorScheme(const AScheme: string);
@@ -996,6 +1000,19 @@ begin
       Close;
 end;
 
+procedure TfrmScript.GoToErrorLine;
+begin
+  Editor.CaretXY := BufferCoord(1, ErrorLine);
+  Editor.EnsureCursorPosVisible;
+  lblModified.Caption := ErrorMessage;
+  frmMain.ScriptLastErrorLine := -1;
+  frmMain.ScriptLastErrorUnitName := '';
+  frmMain.ScriptLastErrorMessage := '';
+  ErrorLine := -1;
+  ErrorUnitName := '';
+  ErrorMessage := '';
+end;
+
 procedure TfrmScript.FormShow(Sender: TObject);
 var
   Parts: TArray<string>;
@@ -1016,6 +1033,8 @@ begin
         FExpandedNodes.Add(s);
   end;
   ReadScriptsList;
+  if ErrorLine > 0 then
+    GoToErrorLine;
 end;
 
 procedure TfrmScript.vstScriptsDblClick(Sender: TObject);
