@@ -16,8 +16,8 @@ uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, StdCtrls, ExtCtrls, Menus, IOUtils, StrUtils, ShellAPI,
   Vcl.ComCtrls, Vcl.FileCtrl, System.UITypes, Generics.Collections,
-  SynEdit, SynMemo, SynEditKeyCmds, xeMainForm, SynHighlighterPas,
-  VirtualTrees;
+  SynEdit, SynMemo, SynEditKeyCmds, SynEditTypes, xeMainForm,
+  SynHighlighterPas, VirtualTrees, Buttons;
 
 const
   sNewScript = '<new script>';
@@ -76,11 +76,8 @@ type
     vstScripts: TVirtualStringTree;
     splLeft: TSplitter;
     pnlBottom: TPanel;
-    btnSave: TButton;
     btnOK: TButton;
     btnCancel: TButton;
-    pnlStatus: TPanel;
-    lblPosition: TLabel;
     dlgSave: TSaveDialog;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -94,9 +91,6 @@ type
     procedure vstScriptsFocusChanged(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex);
     procedure vstScriptsKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure vstScriptsDblClick(Sender: TObject);
-    procedure btnSaveClick(Sender: TObject);
-    procedure EditorKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure EditorMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure EditorKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure EditorKeyPress(Sender: TObject; var Key: Char);
   private
@@ -112,6 +106,19 @@ type
     mniNewScript: TMenuItem;
     mniAddFolder: TMenuItem;
     mniRemoveFolder: TMenuItem;
+    pnlEditor: TPanel;
+    pnlToolbar: TPanel;
+    btnToolSave: TSpeedButton;
+    btnToolReset: TSpeedButton;
+    pnlStatusBar: TPanel;
+    lblCaret: TLabel;
+    lblModified: TLabel;
+    lblInsMode: TLabel;
+    procedure btnSaveClick(Sender: TObject);
+    procedure EditorStatusChange(Sender: TObject; Changes: TSynStatusChanges);
+    procedure btnToolResetClick(Sender: TObject);
+    procedure UpdateToolbarState;
+    procedure UpdateCaretPos;
     function EnsureFolderNode(aRootNode: PVirtualNode; const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
     function FirstScriptNode: PVirtualNode;
     function GetNodeBasePath(Node: PVirtualNode): string;
@@ -135,7 +142,6 @@ type
     Script: string;
     ExtraPathsStr: string;
     ExpandedNodesStr: string;
-    procedure UpdateCaretPos;
     procedure ReadScriptsList;
     procedure SetColorScheme(const AScheme: string);
   end;
@@ -290,7 +296,6 @@ begin
     Text := Editor.Lines.Text.Replace(#9, #32#32);
     CopyFile(PChar(s), PChar(s + '.backup.' + FormatDateTime('yyyy_mm_dd_hh_nn_ss', Now)), True);
     SaveToFile(s);
-    lblPosition.Caption := Format('Saved: %s', [ExtractFileName(s)]);
     Editor.Modified := False;
   finally
     Free;
@@ -363,13 +368,7 @@ end;
 
 procedure TfrmScript.UpdateCaretPos;
 begin
-  lblPosition.Caption := Format('Line:%d Col:%d', [Editor.CaretY, Editor.CaretX]);
-end;
-
-procedure TfrmScript.EditorMouseUp(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
-begin
-  UpdateCaretPos;
+  lblCaret.Caption := Format('Line:%d Col:%d', [Editor.CaretY, Editor.CaretX]);
 end;
 
 function TfrmScript.Indent(aText: string; aPrefix: string): String;
@@ -435,10 +434,50 @@ begin
   end;
 end;
 
-procedure TfrmScript.EditorKeyUp(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
+procedure TfrmScript.EditorStatusChange(Sender: TObject; Changes: TSynStatusChanges);
 begin
-  UpdateCaretPos;
+  if Changes * [scAll, scCaretX, scCaretY] <> [] then
+    UpdateCaretPos;
+  if Changes * [scAll, scModified] <> [] then begin
+    if Editor.Modified then
+      lblModified.Caption := 'Modified'
+    else
+      lblModified.Caption := '';
+    UpdateToolbarState;
+  end;
+  if Changes * [scAll, scInsertMode] <> [] then begin
+    if Editor.InsertMode then
+      lblInsMode.Caption := 'INS'
+    else
+      lblInsMode.Caption := 'OVR';
+  end;
+end;
+
+procedure TfrmScript.UpdateToolbarState;
+begin
+  btnToolSave.Enabled := Editor.Modified;
+  btnToolReset.Enabled := Editor.Modified;
+end;
+
+procedure TfrmScript.btnToolResetClick(Sender: TObject);
+begin
+  if not Editor.Modified then Exit;
+  if SaveOverride = sNewScript then begin
+    Editor.Lines.Clear;
+    with TStringList.Create do try
+      try LoadFromFile(Path + sNewScriptName + sScriptExt); except end;
+      Editor.Lines.Text := Text.Replace(#9, #32#32);
+    finally Free; end;
+    Editor.Modified := False;
+    Exit;
+  end;
+  if (FCurrentRelPath = '') or not FileExists(FCurrentBasePath + FCurrentRelPath + sScriptExt) then
+    Exit;
+  with TStringList.Create do try
+    LoadFromFile(FCurrentBasePath + FCurrentRelPath + sScriptExt);
+    Editor.Lines.Text := Text.Replace(#9, #32#32);
+    Editor.Modified := False;
+  finally Free; end;
 end;
 
 function TfrmScript.EnsureFolderNode(aRootNode: PVirtualNode; const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
@@ -770,8 +809,71 @@ begin
   vstScripts.ShowHint := True;
   vstScripts.OnGetHint := vstScriptsGetHint;
 
+  pnlEditor := TPanel.Create(Self);
+  pnlEditor.Parent := Self;
+  pnlEditor.Align := alClient;
+  pnlEditor.BevelOuter := bvNone;
+
+  pnlToolbar := TPanel.Create(Self);
+  pnlToolbar.Parent := pnlEditor;
+  pnlToolbar.Align := alTop;
+  pnlToolbar.Height := 26;
+  pnlToolbar.BevelOuter := bvNone;
+
+  btnToolSave := TSpeedButton.Create(Self);
+  btnToolSave.Parent := pnlToolbar;
+  btnToolSave.Left := 4;
+  btnToolSave.Top := 1;
+  btnToolSave.Width := 26;
+  btnToolSave.Height := 24;
+  btnToolSave.Caption := #$1F4BE;
+  btnToolSave.Flat := True;
+  btnToolSave.Enabled := False;
+  btnToolSave.OnClick := btnSaveClick;
+
+  btnToolReset := TSpeedButton.Create(Self);
+  btnToolReset.Parent := pnlToolbar;
+  btnToolReset.Left := 34;
+  btnToolReset.Top := 1;
+  btnToolReset.Width := 26;
+  btnToolReset.Height := 24;
+  btnToolReset.Caption := #$21A9;
+  btnToolReset.Flat := True;
+  btnToolReset.Enabled := False;
+  btnToolReset.OnClick := btnToolResetClick;
+
+  pnlStatusBar := TPanel.Create(Self);
+  pnlStatusBar.Parent := pnlEditor;
+  pnlStatusBar.Align := alBottom;
+  pnlStatusBar.Height := 21;
+  pnlStatusBar.BevelOuter := bvLowered;
+
+  lblCaret := TLabel.Create(Self);
+  lblCaret.Parent := pnlStatusBar;
+  lblCaret.Left := 8;
+  lblCaret.Top := 4;
+  lblCaret.Width := 120;
+  lblCaret.AutoSize := False;
+  lblCaret.Caption := 'Line:1 Col:1';
+
+  lblModified := TLabel.Create(Self);
+  lblModified.Parent := pnlStatusBar;
+  lblModified.Left := 140;
+  lblModified.Top := 4;
+  lblModified.Width := 80;
+  lblModified.AutoSize := False;
+  lblModified.Caption := '';
+
+  lblInsMode := TLabel.Create(Self);
+  lblInsMode.Parent := pnlStatusBar;
+  lblInsMode.Align := alRight;
+  lblInsMode.Width := 40;
+  lblInsMode.Alignment := taRightJustify;
+  lblInsMode.Layout := tlCenter;
+  lblInsMode.Caption := 'INS';
+
   Editor := TSynMemo.Create(Self);
-  Editor.Parent := Self;
+  Editor.Parent := pnlEditor;
   Editor.Align := alClient;
   Editor.Font.Name := 'Courier New';
   Editor.Font.Height := -11;
@@ -782,8 +884,7 @@ begin
   Editor.WordWrap := False;
   Editor.OnKeyDown := EditorKeyDown;
   Editor.OnKeyPress := EditorKeyPress;
-  Editor.OnKeyUp := EditorKeyUp;
-  Editor.OnMouseUp := EditorMouseUp;
+  Editor.OnStatusChange := EditorStatusChange;
 
   Highlighter := TSynPasSyn.Create(Self);
   Editor.Highlighter := Highlighter;
@@ -805,7 +906,10 @@ end;
 
 procedure TfrmScript.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 begin
-  if Key = VK_ESCAPE then
+  if (Key = Ord('S')) and (Shift = [ssCtrl]) then begin
+    Key := 0;
+    if Editor.Modified then btnSaveClick(Self);
+  end else if Key = VK_ESCAPE then
     if edFilter.Focused then begin
       edFilter.Text := '';
       edFilterChange(Sender);

@@ -35,18 +35,6 @@ object frmScript: TfrmScript
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
-    DesignSize = (
-      900
-      35)
-    object btnSave: TButton
-      Left = 8
-      Top = 6
-      Width = 75
-      Height = 25
-      Caption = '&Save'
-      TabOrder = 0
-      OnClick = btnSaveClick
-    end
     object btnOK: TButton
       Left = 738
       Top = 6
@@ -55,7 +43,7 @@ object frmScript: TfrmScript
       Anchors = [akTop, akRight]
       Caption = 'OK'
       ModalResult = 1
-      TabOrder = 1
+      TabOrder = 0
     end
     object btnCancel: TButton
       Left = 819
@@ -65,23 +53,7 @@ object frmScript: TfrmScript
       Anchors = [akTop, akRight]
       Caption = 'Cancel'
       ModalResult = 2
-      TabOrder = 2
-    end
-  end
-  object pnlStatus: TPanel
-    Left = 0
-    Top = 544
-    Width = 900
-    Height = 21
-    Align = alBottom
-    BevelOuter = bvLowered
-    TabOrder = 1
-    object lblPosition: TLabel
-      Left = 8
-      Top = 4
-      Width = 884
-      Height = 13
-      AutoSize = False
+      TabOrder = 1
     end
   end
   object pnlLeft: TPanel
@@ -91,7 +63,7 @@ object frmScript: TfrmScript
     Height = 544
     Align = alLeft
     BevelOuter = bvNone
-    TabOrder = 2
+    TabOrder = 1
     object edFilter: TEdit
       Left = 0
       Top = 0
