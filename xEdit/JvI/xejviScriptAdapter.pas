@@ -1014,7 +1014,7 @@ begin
     Value := Element.SortOrder;
 end;
 
-procedure IwbContainer_AssignByPath(var Value: Variant; Args: TJvInterpreterArgs);
+procedure IwbContainer_CopyByPath(var Value: Variant; Args: TJvInterpreterArgs);
 var
   Container: IwbContainerElementRef;
   Element: IwbElement;
@@ -2344,7 +2344,7 @@ begin
     AddFunction(cUnit, 'LastElement', IwbContainer_LastElement, 1, [varEmpty], varEmpty);
     AddFunction(cUnit, 'IndexOf', IwbContainer_IndexOf, 2, [varEmpty, varEmpty], varEmpty);
     AddFunction(cUnit, 'SortOrderOf', IwbContainer_SortOrderOf, 1, [varEmpty], varEmpty);
-    AddFunction(cUnit, 'AssignByPath', IwbContainer_AssignByPath, 3, [varEmpty, varString, varEmpty], varEmpty);
+    AddFunction(cUnit, 'CopyByPath', IwbContainer_CopyByPath, 3, [varEmpty, varString, varEmpty], varEmpty);
     AddFunction(cUnit, 'Add', IwbContainer_Add, 3, [varEmpty, varString, varBoolean], varEmpty);
     AddFunction(cUnit, 'AddElement', IwbContainer_AddElement, 2, [varEmpty, varEmpty], varEmpty);
     AddFunction(cUnit, 'InsertElement', IwbContainer_InsertElement, 3, [varEmpty, varInteger, varEmpty], varEmpty);

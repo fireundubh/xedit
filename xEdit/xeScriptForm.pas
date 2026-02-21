@@ -1311,7 +1311,7 @@ begin
       end;
       if (Sig <> '') and (Pos('\', RelPath) = 0) then begin
         AddItem('Add', 'Add(r, ''' + Sig + ''', True)');
-        AddItem('AssignByPath', 'AssignByPath(r, ''' + Sig + ''', sourceElement)');
+        AddItem('CopyByPath', 'CopyByPath(r, ''' + Sig + ''', sourceElement)');
         Accessor := 'ElementBySignature(r, ''' + Sig + ''')';
         AddItem('ElementBySignature', Accessor);
         if UseEdit then begin
@@ -1326,7 +1326,7 @@ begin
           AddItem('LinksTo', 'LinksTo(' + Accessor + ')');
       end else begin
         AddItem('Add', 'Add(r, ''' + RelPath + ''', True)');
-        AddItem('AssignByPath', 'AssignByPath(r, ''' + RelPath + ''', sourceElement)');
+        AddItem('CopyByPath', 'CopyByPath(r, ''' + RelPath + ''', sourceElement)');
         AddItem('ElementByPath', 'ElementByPath(r, ''' + RelPath + ''')');
         if UseEdit then begin
           AddItem('GetElementEditValues', 'GetElementEditValues(r, ''' + RelPath + ''')');
