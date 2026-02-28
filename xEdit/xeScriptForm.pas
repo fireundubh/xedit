@@ -156,6 +156,11 @@ type
     function GetSignatureStr(aElement: IwbElement): string;
     function GetRelativePath(aElement: IwbElement; aMainRec: IwbMainRecord): string;
     procedure GoToErrorLine;
+    procedure CreateToolbar;
+    procedure CreateStatusBar;
+    procedure CreateEditor;
+    procedure CreateTreeContextMenu;
+    procedure LoadScriptFromFile(const AFilePath: string);
   public
     Path: string;
     LastUsedScript: string;
@@ -205,15 +210,7 @@ begin
   FCurrentRelPath := '';
   SaveOverride := sNewScript;
   Editor.Lines.Clear;
-  with TStringList.Create do try
-    try
-      LoadFromFile(Path + sNewScriptName + sScriptExt);
-    except end;
-    Editor.Lines.Text := Text.Replace(#9, #32#32);
-  finally
-    Free;
-  end;
-  Editor.Modified := False;
+  LoadScriptFromFile(Path + sNewScriptName + sScriptExt);
   Editor.SetFocus;
   UpdateCaretPos;
 end;
@@ -361,16 +358,8 @@ begin
   FCurrentRelPath := NewRelPath;
   SaveOverride := '';
   Editor.Lines.Clear;
-  with TStringList.Create do try
-    try
-      LoadFromFile(NewBasePath + NewRelPath + sScriptExt);
-    except end;
-    Editor.Lines.Text := Text.Replace(#9, #32#32);
-    Editor.Modified := False;
-    UpdateCaretPos;
-  finally
-    Free;
-  end;
+  LoadScriptFromFile(NewBasePath + NewRelPath + sScriptExt);
+  UpdateCaretPos;
 end;
 
 procedure TfrmScript.edFilterChange(Sender: TObject);
@@ -488,20 +477,12 @@ begin
   if not Editor.Modified then Exit;
   if SaveOverride = sNewScript then begin
     Editor.Lines.Clear;
-    with TStringList.Create do try
-      try LoadFromFile(Path + sNewScriptName + sScriptExt); except end;
-      Editor.Lines.Text := Text.Replace(#9, #32#32);
-    finally Free; end;
-    Editor.Modified := False;
+    LoadScriptFromFile(Path + sNewScriptName + sScriptExt);
     Exit;
   end;
   if (FCurrentRelPath = '') or not FileExists(FCurrentBasePath + FCurrentRelPath + sScriptExt) then
     Exit;
-  with TStringList.Create do try
-    LoadFromFile(FCurrentBasePath + FCurrentRelPath + sScriptExt);
-    Editor.Lines.Text := Text.Replace(#9, #32#32);
-    Editor.Modified := False;
-  finally Free; end;
+  LoadScriptFromFile(FCurrentBasePath + FCurrentRelPath + sScriptExt);
 end;
 
 function TfrmScript.EnsureFolderNode(aRootNode: PVirtualNode; const FolderPath: string; FolderNodes: TDictionary<string, PVirtualNode>): PVirtualNode;
@@ -828,8 +809,6 @@ begin
 end;
 
 procedure TfrmScript.FormCreate(Sender: TObject);
-var
-  Sep: TMenuItem;
 begin
   vstScripts.NodeDataSize := SizeOf(TScriptNodeData);
 
@@ -838,6 +817,23 @@ begin
   FExpandedNodes.Sorted := True;
   FInsertRefCodes := TStringList.Create;
 
+  CreateTreeContextMenu;
+  DragAcceptFiles(Self.Handle, True);
+
+  pnlEditor := TPanel.Create(Self);
+  pnlEditor.Parent := Self;
+  pnlEditor.Align := alClient;
+  pnlEditor.BevelOuter := bvNone;
+
+  CreateToolbar;
+  CreateStatusBar;
+  CreateEditor;
+end;
+
+procedure TfrmScript.CreateTreeContextMenu;
+var
+  Sep: TMenuItem;
+begin
   pmuTree := TPopupMenu.Create(Self);
   pmuTree.OnPopup := pmuTreePopup;
 
@@ -861,16 +857,13 @@ begin
   pmuTree.Items.Add(mniRemoveFolder);
 
   vstScripts.PopupMenu := pmuTree;
-  DragAcceptFiles(Self.Handle, True);
   vstScripts.HintMode := hmHint;
   vstScripts.ShowHint := True;
   vstScripts.OnGetHint := vstScriptsGetHint;
+end;
 
-  pnlEditor := TPanel.Create(Self);
-  pnlEditor.Parent := Self;
-  pnlEditor.Align := alClient;
-  pnlEditor.BevelOuter := bvNone;
-
+procedure TfrmScript.CreateToolbar;
+begin
   pnlToolbar := TPanel.Create(Self);
   pnlToolbar.Parent := pnlEditor;
   pnlToolbar.Align := alTop;
@@ -912,7 +905,10 @@ begin
   btnToolInsertRef.OnClick := btnToolInsertRefClick;
 
   pmuInsertRef := TPopupMenu.Create(Self);
+end;
 
+procedure TfrmScript.CreateStatusBar;
+begin
   pnlStatusBar := TPanel.Create(Self);
   pnlStatusBar.Parent := pnlEditor;
   pnlStatusBar.Align := alBottom;
@@ -942,7 +938,10 @@ begin
   lblInsMode.Alignment := taRightJustify;
   lblInsMode.Layout := tlCenter;
   lblInsMode.Caption := 'INS';
+end;
 
+procedure TfrmScript.CreateEditor;
+begin
   Editor := TSynMemo.Create(Self);
   Editor.Parent := pnlEditor;
   Editor.Align := alClient;
@@ -975,6 +974,24 @@ begin
   mniEditorInsertRef.OnClick := btnToolInsertRefClick;
   pmuEditor.Items.Add(mniEditorInsertRef);
   Editor.PopupMenu := pmuEditor;
+end;
+
+procedure TfrmScript.LoadScriptFromFile(const AFilePath: string);
+begin
+  with TStringList.Create do try
+    try
+      LoadFromFile(AFilePath);
+    except
+      on E: Exception do begin
+        lblModified.Caption := 'Load error: ' + E.Message;
+        Exit;
+      end;
+    end;
+    Editor.Lines.Text := Text.Replace(#9, #32#32);
+    Editor.Modified := False;
+  finally
+    Free;
+  end;
 end;
 
 procedure TfrmScript.FormDestroy(Sender: TObject);
